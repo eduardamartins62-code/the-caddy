@@ -3,11 +3,11 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-// SQLite stores enums as String — valid values enforced at app level:
+// Enums stored as String — valid values enforced at app level:
 // UserRole:            USER | SCOREKEEPER | SUPER_ADMIN
 // EventType:           TOURNAMENT | TRIP | WEEKEND | CASUAL
 // EventRecurrence:     ONE_TIME | ANNUAL | SEMI_ANNUAL | MONTHLY | RECURRING_CUSTOM
