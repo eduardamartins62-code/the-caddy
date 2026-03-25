@@ -1,0 +1,322 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// SQLite stores enums as String — valid values enforced at app level:
+// UserRole:            USER | SCOREKEEPER | SUPER_ADMIN
+// EventType:           TOURNAMENT | TRIP | WEEKEND | CASUAL
+// EventRecurrence:     ONE_TIME | ANNUAL | SEMI_ANNUAL | MONTHLY | RECURRING_CUSTOM
+// EventPrivacy:        PUBLIC | PRIVATE | INVITE_ONLY
+// EventStatus:         UPCOMING | LIVE | COMPLETED
+// ParticipantStatus:   PENDING | ACCEPTED | DECLINED
+// ParticipantRole:     PLAYER | SCOREKEEPER | ADMIN
+// ItineraryItemType:   HOTEL | DINING | GOLF | TRANSPORT | NIGHTLIFE | OTHER
+// NotificationType:    FOLLOW | LIKE | COMMENT | INVITE | ROUND_STARTING | LEADERBOARD | SCORE_ENTERED | RECAP | MESSAGE
+
+model User {
+  id                 String   @id @default(cuid())
+  email              String   @unique
+  phone              String?  @unique
+  name               String
+  username           String?  @unique
+  avatar             String?
+  bio                String?
+  handicap           Float?
+  homeCourse         String?
+  location           String?
+  role               String   @default("USER")
+  onboardingComplete Boolean  @default(true)
+  googleId           String?  @unique
+  appleId            String?  @unique
+  pushToken          String?
+  isPrivate          Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  otpCode      String?
+  otpExpiresAt DateTime?
+
+  followers       Follow[]          @relation("Following")
+  following       Follow[]          @relation("Follower")
+  events          EventParticipant[]
+  scores          Score[]
+  posts           SocialPost[]
+  comments        Comment[]
+  createdEvents   Event[]
+  notifications   Notification[]    @relation("NotificationRecipient")
+  sentInvites     EventInvite[]     @relation("InviteSender")
+  receivedInvites EventInvite[]     @relation("InviteRecipient")
+  sentMessages    Message[]         @relation("MessageSender")
+  receivedMessages Message[]        @relation("MessageReceiver")
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("Follower",  fields: [followerId],  references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+}
+
+model Event {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  type           String   @default("TOURNAMENT")
+  recurrence     String   @default("ONE_TIME")
+  recurrenceNote String?
+  privacy        String   @default("INVITE_ONLY")
+  status         String   @default("UPCOMING")
+  startDate      DateTime
+  endDate        DateTime?
+  location       String
+  courseId       String?
+  createdBy      String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // For recurring events — link to "parent" event template
+  parentEventId String?
+  parentEvent   Event?   @relation("EventOccurrences", fields: [parentEventId], references: [id])
+  occurrences   Event[]  @relation("EventOccurrences")
+
+  creator      User               @relation(fields: [createdBy], references: [id])
+  participants EventParticipant[]
+  rounds       Round[]
+  itinerary    ItineraryItem[]
+  history      HistoryEntry[]
+  posts        SocialPost[]
+  invites      EventInvite[]
+}
+
+model EventParticipant {
+  id          String    @id @default(cuid())
+  eventId     String
+  userId      String
+  status      String    @default("PENDING")
+  role        String    @default("PLAYER")
+  invitedAt   DateTime  @default(now())
+  respondedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+}
+
+model EventInvite {
+  id          String   @id @default(cuid())
+  eventId     String
+  senderId    String
+  recipientId String
+  message     String?
+  status      String   @default("PENDING")
+  createdAt   DateTime @default(now())
+
+  event     Event @relation(fields: [eventId],     references: [id], onDelete: Cascade)
+  sender    User  @relation("InviteSender",    fields: [senderId],    references: [id], onDelete: Cascade)
+  recipient User  @relation("InviteRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, recipientId])
+}
+
+model GolfCourse {
+  id           String    @id @default(cuid())
+  externalId   String?   @unique
+  name         String
+  address      String?
+  city         String?
+  state        String?
+  country      String?
+  phone        String?
+  latitude     Float?
+  longitude    Float?
+  par          Int?
+  photoUrl     String?
+  scorecard    String?   // JSON: { holes: [{number, par}] }
+  courseRating Float?
+  courseSlope  Int?
+  cachedAt     DateTime?
+
+  rounds Round[]
+}
+
+model Round {
+  id           String   @id @default(cuid())
+  eventId      String
+  courseId     String?
+  courseName   String
+  coursePhoto  String?
+  coursePar    Int?
+  courseRating Float?
+  courseSlope  Int?
+  roundNumber  Int?
+  date         DateTime
+  status       String   @default("UPCOMING")
+  isComplete   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  event      Event       @relation(fields: [eventId],  references: [id], onDelete: Cascade)
+  golfCourse GolfCourse? @relation(fields: [courseId], references: [id])
+  holes      RoundHole[]
+  scores     Score[]
+}
+
+model RoundHole {
+  id         String @id @default(cuid())
+  roundId    String
+  holeNumber Int
+  par        Int
+
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, holeNumber])
+}
+
+model Score {
+  id         String   @id @default(cuid())
+  roundId    String
+  userId     String
+  holeNumber Int
+  strokes    Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId],  references: [id], onDelete: Cascade)
+
+  @@unique([roundId, userId, holeNumber])
+}
+
+model ItineraryItem {
+  id          String   @id @default(cuid())
+  eventId     String
+  day         Int
+  type        String   @default("OTHER")
+  title       String
+  description String?
+  location    String?
+  mapLink     String?
+  photoUrl    String?
+  time        String?
+  createdAt   DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model SocialPost {
+  id        String   @id @default(cuid())
+  userId    String
+  eventId   String?
+  content   String
+  imageUrl  String?
+  videoUrl  String?
+  courseTag String?
+  courseId  String?
+  location  String?
+  postType  String   @default("MOMENT") // MOMENT | SCORE
+  roundId   String?
+  likes     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User       @relation(fields: [userId],  references: [id], onDelete: Cascade)
+  event    Event?     @relation(fields: [eventId], references: [id])
+  likedBy  PostLike[]
+  comments Comment[]
+}
+
+model PostLike {
+  id     String @id @default(cuid())
+  postId String
+  userId String
+
+  post SocialPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  post SocialPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model HistoryEntry {
+  id           String   @id @default(cuid())
+  eventId      String
+  year         Int
+  champion     String
+  winningScore Int?
+  coursePlayed String?
+  recap        String?
+  photos       String   @default("[]") // JSON-encoded string array (legacy)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  historyPhotos HistoryPhoto[]
+
+  @@unique([eventId, year])
+}
+
+model HistoryPhoto {
+  id             String   @id @default(cuid())
+  historyEntryId String
+  url            String
+  caption        String?
+  createdAt      DateTime @default(now())
+
+  historyEntry HistoryEntry @relation(fields: [historyEntryId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  data      String?  // JSON extra payload
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  content    String
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("MessageSender",   fields: [senderId],   references: [id], onDelete: Cascade)
+  receiver User @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+}
+
+model OTP {
+  id        String   @id @default(cuid())
+  contact   String
+  code      String
+  used      Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}

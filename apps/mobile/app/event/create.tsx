@@ -1,0 +1,696 @@
+import React, { useState, useCallback, useRef } from 'react';
+import {
+  View, Text, ScrollView, StyleSheet, TouchableOpacity,
+  TextInput, Alert, ActivityIndicator, KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { eventsApi, usersApi } from '../../services/api';
+import GlassCard from '../../components/ui/GlassCard';
+import GradientButton from '../../components/ui/GradientButton';
+import AvatarRing from '../../components/ui/AvatarRing';
+import { Colors, Radius, Spacing } from '../../constants/theme';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const TOTAL_STEPS = 4;
+
+const EVENT_FORMATS = [
+  { id: 'STROKE_PLAY',  label: 'Stroke Play',  sub: 'Total strokes, lowest wins',   icon: 'golf-outline' },
+  { id: 'MATCH_PLAY',   label: 'Match Play',   sub: 'Hole-by-hole competition',      icon: 'flag-outline' },
+  { id: 'STABLEFORD',  label: 'Stableford',   sub: 'Points-based scoring system',   icon: 'star-outline' },
+];
+
+const PLAYER_ROLES = [
+  { id: 'PLAYER',      label: 'Player' },
+  { id: 'SCOREKEEPER', label: 'Scorekeeper' },
+];
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface SelectedPlayer {
+  user: any;
+  role: 'PLAYER' | 'SCOREKEEPER';
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function StepIndicator({ current, total }: { current: number; total: number }) {
+  return (
+    <View style={si.wrap}>
+      {Array.from({ length: total }).map((_, i) => {
+        const done    = i < current - 1;
+        const active  = i === current - 1;
+        return (
+          <React.Fragment key={i}>
+            <View style={[si.dot, done && si.dotDone, active && si.dotActive]}>
+              {done
+                ? <Ionicons name="checkmark" size={12} color={Colors.bg} />
+                : <Text style={[si.dotNum, active && si.dotNumActive]}>{i + 1}</Text>
+              }
+            </View>
+            {i < total - 1 && (
+              <View style={[si.line, done && si.lineDone]} />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </View>
+  );
+}
+
+const si = StyleSheet.create({
+  wrap:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16 },
+  dot:         { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.bgTertiary, borderWidth: 1.5, borderColor: Colors.cardBorder, alignItems: 'center', justifyContent: 'center' },
+  dotActive:   { borderColor: Colors.lime, backgroundColor: Colors.limeDim },
+  dotDone:     { backgroundColor: Colors.lime, borderColor: Colors.lime },
+  dotNum:      { color: Colors.textMuted, fontSize: 12, fontWeight: '700' },
+  dotNumActive:{ color: Colors.lime },
+  line:        { flex: 1, height: 1.5, backgroundColor: Colors.cardBorder, marginHorizontal: 4 },
+  lineDone:    { backgroundColor: Colors.lime },
+});
+
+function Label({ children, optional }: { children: string; optional?: boolean }) {
+  return (
+    <View style={lb.row}>
+      <Text style={lb.text}>{children}</Text>
+      {optional && <Text style={lb.opt}>(optional)</Text>}
+    </View>
+  );
+}
+
+const lb = StyleSheet.create({
+  row:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, marginBottom: 10 },
+  text: { color: Colors.textSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 0.8 },
+  opt:  { color: Colors.textMuted, fontSize: 11 },
+});
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+
+export default function CreateEventScreen() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+
+  const [step, setStep] = useState(1);
+  const [creating, setCreating] = useState(false);
+
+  // Step 1 - Basic Info
+  const [name, setName]               = useState('');
+  const [description, setDescription] = useState('');
+  const [courseName, setCourseName]   = useState('');
+
+  // Step 2 - Schedule
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate]     = useState('');
+  const [format, setFormat]       = useState('STROKE_PLAY');
+
+  // Step 3 - Players
+  const [playerSearch, setPlayerSearch]     = useState('');
+  const [searchResults, setSearchResults]   = useState<any[]>([]);
+  const [searching, setSearching]           = useState(false);
+  const [selectedPlayers, setSelectedPlayers] = useState<SelectedPlayer[]>([]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ─── Validation ─────────────────────────────────────────────────────────
+
+  function validateStep() {
+    if (step === 1) {
+      if (!name.trim()) {
+        Alert.alert('Required', 'Event name is required.');
+        return false;
+      }
+    }
+    if (step === 2) {
+      if (!startDate.trim()) {
+        Alert.alert('Required', 'Start date is required.');
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function goNext() {
+    if (!validateStep()) return;
+    setStep((s) => Math.min(s + 1, TOTAL_STEPS));
+  }
+
+  function goBack() {
+    if (step === 1) {
+      router.back();
+    } else {
+      setStep((s) => s - 1);
+    }
+  }
+
+  // ─── Player search ──────────────────────────────────────────────────────
+
+  const handlePlayerSearch = useCallback((q: string) => {
+    setPlayerSearch(q);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!q.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const results = await usersApi.search(q.trim());
+        setSearchResults(results || []);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 350);
+  }, []);
+
+  function addPlayer(user: any) {
+    if (selectedPlayers.some((p) => p.user.id === user.id)) return;
+    setSelectedPlayers((prev) => [...prev, { user, role: 'PLAYER' }]);
+    setPlayerSearch('');
+    setSearchResults([]);
+  }
+
+  function removePlayer(userId: string) {
+    setSelectedPlayers((prev) => prev.filter((p) => p.user.id !== userId));
+  }
+
+  function toggleRole(userId: string) {
+    setSelectedPlayers((prev) =>
+      prev.map((p) =>
+        p.user.id === userId
+          ? { ...p, role: p.role === 'PLAYER' ? 'SCOREKEEPER' : 'PLAYER' }
+          : p
+      )
+    );
+  }
+
+  // ─── Submit ─────────────────────────────────────────────────────────────
+
+  async function handleCreate() {
+    if (selectedPlayers.length === 0) {
+      const proceed = await new Promise<boolean>((resolve) =>
+        Alert.alert(
+          'No participants',
+          'You haven\'t added any players. Create event anyway?',
+          [
+            { text: 'Cancel', onPress: () => resolve(false), style: 'cancel' },
+            { text: 'Create', onPress: () => resolve(true) },
+          ]
+        )
+      );
+      if (!proceed) return;
+    }
+
+    setCreating(true);
+    try {
+      const payload: any = {
+        name: name.trim(),
+        description: description.trim() || undefined,
+        courseName: courseName.trim() || undefined,
+        startDate: startDate ? new Date(startDate).toISOString() : undefined,
+        endDate:   endDate   ? new Date(endDate).toISOString()   : undefined,
+        format,
+        participants: selectedPlayers.map((p) => ({
+          userId: p.user.id,
+          role:   p.role,
+        })),
+      };
+
+      await eventsApi.create(payload);
+
+      Alert.alert('Event Created!', `${name} has been created.`, [
+        { text: 'View Events', onPress: () => router.back() },
+      ]);
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to create event. Please try again.');
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  // ─── Render steps ────────────────────────────────────────────────────────
+
+  const renderStep1 = () => (
+    <ScrollView
+      contentContainerStyle={styles.scroll}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
+      <Text style={styles.stepHeading}>Basic Information</Text>
+      <Text style={styles.stepSub}>Tell us about your event</Text>
+
+      <Label>Event Name</Label>
+      <TextInput
+        style={[styles.input, !name.trim() && styles.inputRequired]}
+        value={name}
+        onChangeText={setName}
+        placeholder="Masters Weekend 2026"
+        placeholderTextColor={Colors.textMuted}
+        autoCapitalize="words"
+        returnKeyType="next"
+      />
+
+      <Label optional>Description</Label>
+      <TextInput
+        style={[styles.input, styles.inputMulti]}
+        value={description}
+        onChangeText={setDescription}
+        placeholder="Add a description for your event..."
+        placeholderTextColor={Colors.textMuted}
+        multiline
+        numberOfLines={3}
+        textAlignVertical="top"
+      />
+
+      <Label optional>Course Name</Label>
+      <TextInput
+        style={styles.input}
+        value={courseName}
+        onChangeText={setCourseName}
+        placeholder="Augusta National Golf Club"
+        placeholderTextColor={Colors.textMuted}
+        autoCapitalize="words"
+        returnKeyType="done"
+      />
+      <Text style={styles.inputHint}>Start typing to search for a course</Text>
+    </ScrollView>
+  );
+
+  const renderStep2 = () => (
+    <ScrollView
+      contentContainerStyle={styles.scroll}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
+      <Text style={styles.stepHeading}>Schedule & Format</Text>
+      <Text style={styles.stepSub}>When is the event and how will it be scored?</Text>
+
+      <Label>Start Date</Label>
+      <TextInput
+        style={styles.input}
+        value={startDate}
+        onChangeText={setStartDate}
+        placeholder="YYYY-MM-DD (e.g. 2026-04-10)"
+        placeholderTextColor={Colors.textMuted}
+        keyboardType="numbers-and-punctuation"
+        returnKeyType="next"
+      />
+
+      <Label optional>End Date</Label>
+      <TextInput
+        style={styles.input}
+        value={endDate}
+        onChangeText={setEndDate}
+        placeholder="YYYY-MM-DD (e.g. 2026-04-13)"
+        placeholderTextColor={Colors.textMuted}
+        keyboardType="numbers-and-punctuation"
+        returnKeyType="done"
+      />
+
+      <Label>Scoring Format</Label>
+      <View style={styles.formatGrid}>
+        {EVENT_FORMATS.map((f) => {
+          const active = format === f.id;
+          return (
+            <TouchableOpacity
+              key={f.id}
+              style={[styles.formatCard, active && styles.formatCardActive]}
+              onPress={() => setFormat(f.id)}
+              activeOpacity={0.75}
+            >
+              <Ionicons
+                name={f.icon as any}
+                size={22}
+                color={active ? Colors.lime : Colors.textMuted}
+              />
+              <Text style={[styles.formatLabel, active && styles.formatLabelActive]}>
+                {f.label}
+              </Text>
+              <Text style={styles.formatSub}>{f.sub}</Text>
+              {active && (
+                <View style={styles.formatCheck}>
+                  <Ionicons name="checkmark-circle" size={16} color={Colors.lime} />
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </ScrollView>
+  );
+
+  const renderStep3 = () => (
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.stepHeading}>Add Players</Text>
+        <Text style={styles.stepSub}>Search and invite participants to your event</Text>
+
+        {/* Search input */}
+        <View style={styles.searchWrap}>
+          <Ionicons name="search-outline" size={16} color={Colors.textMuted} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            value={playerSearch}
+            onChangeText={handlePlayerSearch}
+            placeholder="Search by name or username..."
+            placeholderTextColor={Colors.textMuted}
+            returnKeyType="search"
+            autoCapitalize="none"
+          />
+          {searching && <ActivityIndicator size="small" color={Colors.lime} style={{ marginRight: 10 }} />}
+        </View>
+
+        {/* Search results */}
+        {searchResults.length > 0 && (
+          <GlassCard style={styles.searchResults}>
+            {searchResults.map((user: any) => {
+              const alreadyAdded = selectedPlayers.some((p) => p.user.id === user.id);
+              return (
+                <TouchableOpacity
+                  key={user.id}
+                  style={styles.searchResultRow}
+                  onPress={() => addPlayer(user)}
+                  disabled={alreadyAdded}
+                  activeOpacity={0.7}
+                >
+                  <AvatarRing uri={user.avatar} name={user.name} size={36} ring="none" />
+                  <View style={styles.searchResultInfo}>
+                    <Text style={styles.searchResultName}>{user.name}</Text>
+                    {user.username && (
+                      <Text style={styles.searchResultSub}>@{user.username}</Text>
+                    )}
+                  </View>
+                  {alreadyAdded
+                    ? <Ionicons name="checkmark-circle" size={20} color={Colors.lime} />
+                    : <Ionicons name="add-circle-outline" size={20} color={Colors.textSecondary} />
+                  }
+                </TouchableOpacity>
+              );
+            })}
+          </GlassCard>
+        )}
+
+        {playerSearch.trim().length > 0 && !searching && searchResults.length === 0 && (
+          <Text style={styles.noResults}>No users found for "{playerSearch}"</Text>
+        )}
+
+        {/* Selected players */}
+        {selectedPlayers.length > 0 && (
+          <View style={styles.selectedSection}>
+            <Text style={styles.selectedTitle}>
+              Selected Players ({selectedPlayers.length})
+            </Text>
+            {selectedPlayers.map(({ user, role }) => (
+              <GlassCard key={user.id} style={styles.selectedPlayerCard}>
+                <View style={styles.selectedPlayerRow}>
+                  <AvatarRing uri={user.avatar} name={user.name} size={38} ring={role === 'SCOREKEEPER' ? 'purple' : 'none'} />
+                  <View style={styles.selectedPlayerInfo}>
+                    <Text style={styles.selectedPlayerName}>{user.name}</Text>
+                    {user.username && (
+                      <Text style={styles.selectedPlayerSub}>@{user.username}</Text>
+                    )}
+                  </View>
+                  {/* Role toggle */}
+                  <TouchableOpacity
+                    style={[styles.roleChip, role === 'SCOREKEEPER' && styles.roleChipActive]}
+                    onPress={() => toggleRole(user.id)}
+                  >
+                    <Text style={[styles.roleChipText, role === 'SCOREKEEPER' && styles.roleChipTextActive]}>
+                      {role === 'SCOREKEEPER' ? 'Scorekeeper' : 'Player'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => removePlayer(user.id)} style={styles.removeBtn}>
+                    <Ionicons name="close-circle" size={20} color={Colors.error} />
+                  </TouchableOpacity>
+                </View>
+              </GlassCard>
+            ))}
+          </View>
+        )}
+
+        {selectedPlayers.length === 0 && (
+          <View style={styles.noPlayersHint}>
+            <Ionicons name="people-outline" size={36} color={Colors.textMuted} />
+            <Text style={styles.noPlayersText}>No players added yet.</Text>
+            <Text style={styles.noPlayersSubText}>You can still create the event and invite players later.</Text>
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+
+  const renderStep4 = () => {
+    const selectedFormat = EVENT_FORMATS.find((f) => f.id === format);
+    return (
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.stepHeading}>Review & Create</Text>
+        <Text style={styles.stepSub}>Confirm your event details before creating</Text>
+
+        {/* Summary card */}
+        <GlassCard glow="lime" style={styles.summaryCard}>
+          <Text style={styles.summaryEventName}>{name || 'Untitled Event'}</Text>
+          {description ? (
+            <Text style={styles.summaryDesc} numberOfLines={2}>{description}</Text>
+          ) : null}
+
+          <View style={styles.summaryDivider} />
+
+          <SummaryRow icon="calendar-outline"    label="Start Date"  value={startDate || '—'} />
+          {endDate ? <SummaryRow icon="calendar-outline" label="End Date"    value={endDate} /> : null}
+          <SummaryRow icon="location-outline"    label="Course"      value={courseName || '—'} />
+          <SummaryRow icon="golf-outline"        label="Format"      value={selectedFormat?.label ?? format} />
+          <SummaryRow icon="people-outline"      label="Players"     value={selectedPlayers.length > 0 ? `${selectedPlayers.length} invited` : 'None yet'} />
+        </GlassCard>
+
+        {/* Player list preview */}
+        {selectedPlayers.length > 0 && (
+          <GlassCard style={{ marginBottom: 16 }}>
+            <Text style={styles.summarySubTitle}>Invited Players</Text>
+            {selectedPlayers.map(({ user, role }) => (
+              <View key={user.id} style={styles.summaryPlayerRow}>
+                <AvatarRing uri={user.avatar} name={user.name} size={32} ring="none" />
+                <Text style={styles.summaryPlayerName} numberOfLines={1}>{user.name}</Text>
+                <View style={[styles.roleChip, role === 'SCOREKEEPER' && styles.roleChipActive]}>
+                  <Text style={[styles.roleChipText, role === 'SCOREKEEPER' && styles.roleChipTextActive]}>
+                    {role}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </GlassCard>
+        )}
+
+        {/* Warning if no name */}
+        {!name.trim() && (
+          <View style={styles.warningBox}>
+            <Ionicons name="warning-outline" size={16} color={Colors.warning} />
+            <Text style={styles.warningText}>Event name is required to create.</Text>
+          </View>
+        )}
+
+        <GradientButton
+          label="Create Event"
+          onPress={handleCreate}
+          loading={creating}
+          disabled={!name.trim() || creating}
+          style={{ marginTop: 8 }}
+        />
+      </ScrollView>
+    );
+  };
+
+  const renderCurrentStep = () => {
+    switch (step) {
+      case 1: return renderStep1();
+      case 2: return renderStep2();
+      case 3: return renderStep3();
+      case 4: return renderStep4();
+      default: return null;
+    }
+  };
+
+  // ─── Main render ────────────────────────────────────────────────────────
+
+  return (
+    <KeyboardAvoidingView
+      style={[styles.screen, { paddingTop: insets.top }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={goBack}>
+          <Ionicons name="arrow-back" size={20} color={Colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Create Event</Text>
+        <View style={{ width: 36 }} />
+      </View>
+
+      {/* Step indicator */}
+      <StepIndicator current={step} total={TOTAL_STEPS} />
+
+      {/* Step content */}
+      <View style={{ flex: 1 }}>
+        {renderCurrentStep()}
+      </View>
+
+      {/* Footer nav */}
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
+        {step < TOTAL_STEPS && (
+          <TouchableOpacity style={styles.skipBtn} onPress={() => setStep((s) => s + 1)}>
+            <Text style={styles.skipText}>Skip</Text>
+          </TouchableOpacity>
+        )}
+        {step < TOTAL_STEPS ? (
+          <GradientButton
+            label="Next"
+            onPress={goNext}
+            variant="lime"
+            size="md"
+            style={{ flex: 1, maxWidth: 200 }}
+          />
+        ) : null}
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+// ─── Summary row ──────────────────────────────────────────────────────────────
+
+function SummaryRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <View style={sr.row}>
+      <Ionicons name={icon as any} size={14} color={Colors.lime} />
+      <Text style={sr.label}>{label}</Text>
+      <Text style={sr.value} numberOfLines={1}>{value}</Text>
+    </View>
+  );
+}
+
+const sr = StyleSheet.create({
+  row:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  label: { color: Colors.textSecondary, fontSize: 13, width: 80, flexShrink: 0 },
+  value: { color: Colors.textPrimary, fontSize: 13, flex: 1 },
+});
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: Colors.bg },
+
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: Colors.cardBorder,
+  },
+  backBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: Colors.bgSecondary,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  headerTitle: { color: Colors.textPrimary, fontSize: 18, fontWeight: '800' },
+
+  scroll: { padding: Spacing.md, paddingBottom: 24 },
+
+  stepHeading: { color: Colors.textPrimary, fontSize: 22, fontWeight: '800', marginBottom: 6 },
+  stepSub:     { color: Colors.textSecondary, fontSize: 14, marginBottom: 20, lineHeight: 20 },
+
+  input: {
+    backgroundColor: Colors.bgSecondary,
+    borderWidth: 1.5, borderColor: Colors.cardBorder,
+    borderRadius: Radius.md,
+    paddingHorizontal: 14, paddingVertical: 12,
+    color: Colors.textPrimary, fontSize: 15,
+    marginBottom: 16,
+  },
+  inputRequired: { borderColor: Colors.lime + '55' },
+  inputMulti:    { height: 90, paddingTop: 12 },
+  inputHint:     { color: Colors.textMuted, fontSize: 11, marginTop: -12, marginBottom: 16, marginLeft: 4 },
+
+  // Format
+  formatGrid: { gap: 10, marginBottom: 8 },
+  formatCard: {
+    backgroundColor: Colors.bgSecondary,
+    borderRadius: Radius.lg, borderWidth: 1.5, borderColor: Colors.cardBorder,
+    padding: 16, gap: 4, position: 'relative',
+  },
+  formatCardActive: { borderColor: Colors.lime, backgroundColor: Colors.limeDim },
+  formatLabel:      { color: Colors.textPrimary, fontSize: 15, fontWeight: '700', marginTop: 4 },
+  formatLabelActive:{ color: Colors.lime },
+  formatSub:        { color: Colors.textSecondary, fontSize: 12 },
+  formatCheck:      { position: 'absolute', top: 12, right: 12 },
+
+  // Search
+  searchWrap:   {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: Colors.bgSecondary,
+    borderWidth: 1.5, borderColor: Colors.cardBorder,
+    borderRadius: Radius.md, marginBottom: 12,
+  },
+  searchIcon:   { marginLeft: 12 },
+  searchInput:  { flex: 1, paddingHorizontal: 10, paddingVertical: 12, color: Colors.textPrimary, fontSize: 15 },
+  searchResults:{ marginBottom: 14, padding: 0, overflow: 'hidden' },
+  searchResultRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    padding: 12, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder,
+  },
+  searchResultInfo: { flex: 1 },
+  searchResultName: { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  searchResultSub:  { color: Colors.textSecondary, fontSize: 12, marginTop: 2 },
+  noResults:    { color: Colors.textMuted, fontSize: 13, textAlign: 'center', marginVertical: 12 },
+
+  // Selected players
+  selectedSection:    { marginTop: 4 },
+  selectedTitle:      { color: Colors.textSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 0.8, marginBottom: 10 },
+  selectedPlayerCard: { marginBottom: 8, padding: 12 },
+  selectedPlayerRow:  { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  selectedPlayerInfo: { flex: 1 },
+  selectedPlayerName: { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  selectedPlayerSub:  { color: Colors.textSecondary, fontSize: 11, marginTop: 2 },
+  roleChip:           { paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.full, backgroundColor: Colors.bgTertiary, borderWidth: 1, borderColor: Colors.cardBorder },
+  roleChipActive:     { backgroundColor: Colors.purpleDim, borderColor: Colors.purple },
+  roleChipText:       { color: Colors.textSecondary, fontSize: 11, fontWeight: '600' },
+  roleChipTextActive: { color: Colors.purple },
+  removeBtn:          { padding: 2 },
+
+  noPlayersHint:    { alignItems: 'center', paddingVertical: 32, gap: 8, marginTop: 8 },
+  noPlayersText:    { color: Colors.textSecondary, fontSize: 14, fontWeight: '600' },
+  noPlayersSubText: { color: Colors.textMuted, fontSize: 12, textAlign: 'center', lineHeight: 18 },
+
+  // Review step
+  summaryCard:       { marginBottom: 16, padding: 20 },
+  summaryEventName:  { color: Colors.textPrimary, fontSize: 20, fontWeight: '800', marginBottom: 6 },
+  summaryDesc:       { color: Colors.textSecondary, fontSize: 13, lineHeight: 19, marginBottom: 10 },
+  summaryDivider:    { height: 1, backgroundColor: Colors.cardBorder, marginBottom: 14 },
+  summarySubTitle:   { color: Colors.textSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 0.8, marginBottom: 12 },
+  summaryPlayerRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  summaryPlayerName: { color: Colors.textPrimary, fontSize: 14, fontWeight: '600', flex: 1 },
+
+  warningBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.warning + '18',
+    borderRadius: Radius.md, padding: 12, marginBottom: 16,
+    borderWidth: 1, borderColor: Colors.warning + '44',
+  },
+  warningText: { color: Colors.warning, fontSize: 13, fontWeight: '600' },
+
+  // Footer nav
+  footer: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
+    paddingHorizontal: Spacing.md, paddingTop: 12,
+    borderTopWidth: 1, borderTopColor: Colors.cardBorder,
+    backgroundColor: Colors.bg,
+    gap: 12,
+  },
+  skipBtn:  { paddingHorizontal: 16, paddingVertical: 10 },
+  skipText: { color: Colors.textSecondary, fontSize: 14 },
+});
