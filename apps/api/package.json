@@ -13,7 +13,6 @@
   },
   "dependencies": {
     "@prisma/client": "^5.10.0",
-    "@the-caddy/shared": "*",
     "@types/helmet": "^0.0.48",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.0.0",
