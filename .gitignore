@@ -8,7 +8,6 @@ dist/
 .expo/
 .next/
 web-build/
-apps/api/prisma/migrations/
 
 # SQLite database files
 *.db
