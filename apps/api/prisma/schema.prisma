@@ -79,9 +79,10 @@ model Event {
   recurrenceNote String?
   privacy        String   @default("INVITE_ONLY")
   status         String   @default("UPCOMING")
+  format         String    @default("STROKE_PLAY")
   startDate      DateTime
   endDate        DateTime?
-  location       String
+  location       String?
   courseId       String?
   createdBy      String
   isActive       Boolean  @default(true)

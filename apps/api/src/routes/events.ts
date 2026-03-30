@@ -19,16 +19,29 @@ router.get('/', async (_req, res: Response) => {
 // POST /api/events
 router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   const {
-    name, description, type = 'TOURNAMENT', recurrence = 'ONE_TIME',
-    recurrenceNote, privacy = 'INVITE_ONLY', startDate, endDate,
-    location, courseId,
+    name, description, type = 'TOURNAMENT', format = 'STROKE_PLAY',
+    recurrence = 'ONE_TIME', recurrenceNote, privacy = 'INVITE_ONLY',
+    startDate, endDate, location, courseId, participants = [],
   } = req.body;
+
+  if (!name?.trim()) { res.status(400).json({ error: 'Event name is required' }); return; }
+  if (!startDate)    { res.status(400).json({ error: 'Start date is required' }); return; }
+
   const event = await prisma.event.create({
     data: {
-      name, description, type, recurrence, recurrenceNote, privacy,
-      startDate: new Date(startDate),
-      endDate:   endDate ? new Date(endDate) : null,
+      name: name.trim(), description, type, format, recurrence, recurrenceNote,
+      privacy, startDate: new Date(startDate),
+      endDate: endDate ? new Date(endDate) : null,
       location, courseId, createdBy: req.user!.id,
+      // Auto-add creator as SCOREKEEPER participant
+      participants: {
+        create: [
+          { userId: req.user!.id, role: 'SCOREKEEPER', status: 'ACCEPTED' },
+          ...participants
+            .filter((p: any) => p.userId !== req.user!.id)
+            .map((p: any) => ({ userId: p.userId, role: p.role || 'PLAYER', status: 'PENDING' })),
+        ],
+      },
     },
   });
   res.status(201).json({ data: event });
