@@ -73,6 +73,22 @@ export const usersApi = {
   getRounds: (id: string) => request<any[]>(`/users/${id}/rounds`),
   follow: (id: string) => request(`/users/${id}/follow`, { method: 'POST' }),
   unfollow: (id: string) => request(`/users/${id}/follow`, { method: 'DELETE' }),
+  uploadAvatar: async (uri: string): Promise<{ avatar: string }> => {
+    const token = await getToken();
+    const formData = new FormData();
+    formData.append('avatar', { uri, name: 'avatar.jpg', type: 'image/jpeg' } as any);
+    const res = await fetch(`${API_BASE}/users/me/avatar`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data',
+      },
+      body: formData,
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Upload failed');
+    return json.data ?? json;
+  },
 };
 
 // ─── Events ──────────────────────────────────────────────────────────────────

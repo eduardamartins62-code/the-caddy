@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth';
+import { upload } from '../lib/cloudinary';
 
 const router = Router();
 
@@ -62,6 +63,20 @@ router.put('/me', authenticate, async (req: AuthRequest, res: Response) => {
     select: PRIVATE_SELECT,
   });
   res.json({ data: user });
+});
+
+// POST /api/users/me/avatar — upload profile picture
+router.post('/me/avatar', authenticate, upload.single('avatar'), async (req: AuthRequest, res: Response) => {
+  const url = (req.file as any)?.path;
+  if (!url) {
+    res.status(400).json({ error: 'No file uploaded' });
+    return;
+  }
+  await prisma.user.update({
+    where: { id: req.user!.id },
+    data: { avatar: url },
+  });
+  res.json({ data: { avatar: url } });
 });
 
 // GET /api/users/search?q=  — search users by name or username

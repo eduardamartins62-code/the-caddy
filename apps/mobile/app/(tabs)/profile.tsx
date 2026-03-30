@@ -1,17 +1,19 @@
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Dimensions, Image, RefreshControl,
+  Dimensions, Image, RefreshControl, Alert, Modal, TextInput, ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Shield, LogOut, LayoutGrid, TrendingUp, List,
-  Flag, MapPin, Bell, Zap, Star, Trophy, Map, AlertCircle,
+  Flag, MapPin, Bell, Zap, Star, Trophy, Map, AlertCircle, Camera,
 } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
+import { usersApi } from '../../services/api';
 import {
   useMe, useUserStats, useUserPosts, useUserRounds,
   useFollowers, useFollowing, useUnreadCount,
@@ -29,10 +31,15 @@ const CELL = (Dimensions.get('window').width - 4) / 3;
 export default function ProfileTab() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user: authUser, signOut } = useAuth();
+  const { user: authUser, signOut, refreshUser, updateUser } = useAuth();
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<ProfileTab>('posts');
   const [refreshing, setRefreshing] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editUsername, setEditUsername] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
 
   const userId = authUser?.id ?? '';
 
@@ -63,6 +70,56 @@ export default function ProfileTab() {
     ]);
     setRefreshing(false);
   }, [qc, userId]);
+
+  // ─── Avatar upload ───────────────────────────────────────────────────────
+  const handleAvatarPress = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Please allow access to your photo library to update your profile picture.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled) return;
+    const uri = result.assets[0].uri;
+    try {
+      setAvatarUploading(true);
+      const data = await usersApi.uploadAvatar(uri);
+      await updateUser({ avatar: data.avatar });
+      await qc.invalidateQueries({ queryKey: ['me'] });
+    } catch (e: any) {
+      Alert.alert('Upload failed', e?.message ?? 'Could not upload photo. Please try again.');
+    } finally {
+      setAvatarUploading(false);
+    }
+  }, [updateUser, qc]);
+
+  // ─── Edit profile ────────────────────────────────────────────────────────
+  const handleEditProfilePress = useCallback(() => {
+    setEditName(user?.name ?? '');
+    setEditUsername(user?.username ?? '');
+    setEditModalVisible(true);
+  }, [user]);
+
+  const handleEditProfileSave = useCallback(async () => {
+    try {
+      setEditSaving(true);
+      await usersApi.updateMe({ name: editName.trim(), username: editUsername.trim() || undefined });
+      await Promise.all([
+        refreshUser(),
+        qc.invalidateQueries({ queryKey: ['me'] }),
+      ]);
+      setEditModalVisible(false);
+    } catch (e: any) {
+      Alert.alert('Save failed', e?.message ?? 'Could not save changes. Please try again.');
+    } finally {
+      setEditSaving(false);
+    }
+  }, [editName, editUsername, refreshUser, qc]);
 
   if (!user) return null;
 
@@ -120,7 +177,14 @@ export default function ProfileTab() {
           <LinearGradient colors={['#1A1A2E', Colors.bg]} style={styles.heroCard}>
             <View style={styles.heroGlow} />
             <View style={styles.heroTop}>
-              <AvatarRing uri={user.avatar} name={user.name} size={80} ring="lime" />
+              <TouchableOpacity onPress={handleAvatarPress} activeOpacity={0.8} style={styles.avatarWrapper}>
+                <AvatarRing uri={user.avatar} name={user.name} size={80} ring="lime" />
+                <View style={styles.cameraBadge}>
+                  {avatarUploading
+                    ? <ActivityIndicator size="small" color={Colors.bg} />
+                    : <Camera size={13} color={Colors.bg} strokeWidth={2.5} />}
+                </View>
+              </TouchableOpacity>
               <View style={styles.heroInfo}>
                 <Text style={styles.heroName}>{user.name}</Text>
                 <View style={[styles.roleBadge, { borderColor: roleBadge.color + '50', backgroundColor: roleBadge.color + '15' }]}>
@@ -173,7 +237,7 @@ export default function ProfileTab() {
 
             <GradientButton
               label="Edit Profile"
-              onPress={() => {}}
+              onPress={handleEditProfilePress}
               variant="outline"
               size="sm"
               style={{ alignSelf: 'flex-start', marginTop: 16 }}
@@ -317,6 +381,60 @@ export default function ProfileTab() {
           )}
         </ScrollView>
       )}
+
+      {/* ── Edit Profile Modal ── */}
+      <Modal
+        visible={editModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Edit Profile</Text>
+
+            <Text style={styles.modalLabel}>Name</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="Your name"
+              placeholderTextColor={Colors.textMuted}
+              autoCapitalize="words"
+            />
+
+            <Text style={styles.modalLabel}>Username</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editUsername}
+              onChangeText={setEditUsername}
+              placeholder="username"
+              placeholderTextColor={Colors.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnCancel]}
+                onPress={() => setEditModalVisible(false)}
+                disabled={editSaving}
+              >
+                <Text style={styles.modalBtnCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnSave]}
+                onPress={handleEditProfileSave}
+                disabled={editSaving}
+              >
+                {editSaving
+                  ? <ActivityIndicator size="small" color={Colors.bg} />
+                  : <Text style={styles.modalBtnSaveText}>Save</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -426,4 +544,39 @@ const styles = StyleSheet.create({
   // Empty
   emptyState: { alignItems: 'center', paddingTop: 40, gap: 10, width: '100%' },
   emptyText: { color: Colors.textSecondary, fontSize: 15 },
+
+  // Avatar wrapper + camera badge
+  avatarWrapper: { position: 'relative' },
+  cameraBadge: {
+    position: 'absolute', bottom: 0, right: 0,
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: Colors.lime, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: Colors.bg,
+  },
+
+  // Edit profile modal
+  modalOverlay: {
+    flex: 1, backgroundColor: Colors.overlay,
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: Spacing.md,
+  },
+  modalCard: {
+    width: '100%', backgroundColor: Colors.bgSecondary,
+    borderRadius: Radius.xl, padding: 24,
+    borderWidth: 1, borderColor: Colors.cardBorder,
+  },
+  modalTitle: { color: Colors.textPrimary, fontSize: 18, fontWeight: '800', marginBottom: 20 },
+  modalLabel: { color: Colors.textSecondary, fontSize: 12, fontWeight: '600', letterSpacing: 0.5, marginBottom: 6 },
+  modalInput: {
+    backgroundColor: Colors.bgTertiary, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.cardBorder,
+    color: Colors.textPrimary, fontSize: 15, paddingHorizontal: 14, paddingVertical: 11,
+    marginBottom: 16,
+  },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  modalBtn: { flex: 1, height: 44, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
+  modalBtnCancel: { backgroundColor: Colors.bgTertiary, borderWidth: 1, borderColor: Colors.cardBorder },
+  modalBtnCancelText: { color: Colors.textSecondary, fontSize: 14, fontWeight: '700' },
+  modalBtnSave: { backgroundColor: Colors.lime },
+  modalBtnSaveText: { color: Colors.bg, fontSize: 14, fontWeight: '800' },
 });
