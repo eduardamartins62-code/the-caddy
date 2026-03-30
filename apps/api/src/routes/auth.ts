@@ -82,7 +82,8 @@ router.post('/request-otp', async (req: Request, res: Response) => {
 
   console.log(`\n[DEV] OTP for ${emailLower}: ${code}\n`);
 
-  try { await sendOTPEmail(emailLower, code); } catch { /* SMTP not configured in dev */ }
+  // Fire-and-forget — don't block the response on SMTP delivery
+  sendOTPEmail(emailLower, code).catch(() => { /* SMTP not configured */ });
 
   res.json({ message: 'OTP sent to email', via: 'email', contact: emailLower });
 });
