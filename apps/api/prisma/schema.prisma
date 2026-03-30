@@ -41,18 +41,21 @@ model User {
   otpCode      String?
   otpExpiresAt DateTime?
 
-  followers       Follow[]          @relation("Following")
-  following       Follow[]          @relation("Follower")
-  events          EventParticipant[]
-  scores          Score[]
-  posts           SocialPost[]
-  comments        Comment[]
-  createdEvents   Event[]
-  notifications   Notification[]    @relation("NotificationRecipient")
-  sentInvites     EventInvite[]     @relation("InviteSender")
-  receivedInvites EventInvite[]     @relation("InviteRecipient")
-  sentMessages    Message[]         @relation("MessageSender")
-  receivedMessages Message[]        @relation("MessageReceiver")
+  handicapIndex    Float?
+
+  followers        Follow[]           @relation("Following")
+  following        Follow[]           @relation("Follower")
+  events           EventParticipant[]
+  scores           Score[]
+  posts            SocialPost[]
+  comments         Comment[]
+  createdEvents    Event[]
+  notifications    Notification[]     @relation("NotificationRecipient")
+  sentInvites      EventInvite[]      @relation("InviteSender")
+  receivedInvites  EventInvite[]      @relation("InviteRecipient")
+  sentMessages     Message[]          @relation("MessageSender")
+  receivedMessages Message[]          @relation("MessageReceiver")
+  handicapRecords  HandicapRecord[]
 }
 
 model Follow {
@@ -186,18 +189,30 @@ model RoundHole {
 }
 
 model Score {
-  id         String   @id @default(cuid())
-  roundId    String
-  userId     String
-  holeNumber Int
-  strokes    Int
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String   @id @default(cuid())
+  roundId     String
+  userId      String
+  holeNumber  Int
+  strokes     Int
+  fairwayHit  Boolean? // null = N/A (par 3s), true/false for par 4/5
+  greenInReg  Boolean? // Green in regulation
+  putts       Int?     // Number of putts on the hole
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId],  references: [id], onDelete: Cascade)
 
   @@unique([roundId, userId, holeNumber])
+}
+
+model HandicapRecord {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  handicapIndex Float
+  calculatedAt  DateTime @default(now())
+  roundsUsed    Int      // How many rounds used in calculation
 }
 
 model ItineraryItem {

@@ -41,17 +41,30 @@ async function buildAndEmitLeaderboard(roundId: string) {
 
 // POST /api/scores — submit or update a hole score
 router.post('/', authenticate, requireScorekeeper, async (req: AuthRequest, res: Response) => {
-  const { roundId, userId, holeNumber, strokes } = req.body as {
+  const { roundId, userId, holeNumber, strokes, fairwayHit, greenInReg, putts } = req.body as {
     roundId:    string;
     userId:     string;
     holeNumber: number;
     strokes:    number;
+    fairwayHit?: boolean | null;
+    greenInReg?: boolean | null;
+    putts?:      number | null;
   };
 
   const score = await prisma.score.upsert({
     where:  { roundId_userId_holeNumber: { roundId, userId, holeNumber } },
-    update: { strokes },
-    create: { roundId, userId, holeNumber, strokes },
+    update: {
+      strokes,
+      ...(fairwayHit !== undefined ? { fairwayHit } : {}),
+      ...(greenInReg !== undefined ? { greenInReg } : {}),
+      ...(putts      !== undefined ? { putts }      : {}),
+    },
+    create: {
+      roundId, userId, holeNumber, strokes,
+      fairwayHit: fairwayHit ?? null,
+      greenInReg: greenInReg ?? null,
+      putts:      putts ?? null,
+    },
   });
 
   await buildAndEmitLeaderboard(roundId);

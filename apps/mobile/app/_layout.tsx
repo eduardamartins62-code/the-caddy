@@ -40,6 +40,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="leaderboard" options={{ presentation: 'modal' }} />
       <Stack.Screen name="round/[id]" />
+      <Stack.Screen name="round/stats" />
       <Stack.Screen name="profile/[id]" />
       <Stack.Screen name="event/[id]" />
       <Stack.Screen name="event/create" />

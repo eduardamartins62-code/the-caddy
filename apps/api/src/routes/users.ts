@@ -79,6 +79,109 @@ router.post('/me/avatar', authenticate, upload.single('avatar'), async (req: Aut
   res.json({ data: { avatar: url } });
 });
 
+// GET /api/users/me/handicap — current handicap index and recent records
+router.get('/me/handicap', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where:  { id: req.user!.id },
+      select: { handicapIndex: true },
+    });
+
+    const records = await prisma.handicapRecord.findMany({
+      where:   { userId: req.user!.id },
+      orderBy: { calculatedAt: 'desc' },
+      take:    10,
+    });
+
+    res.json({ data: { handicapIndex: user?.handicapIndex ?? null, records } });
+  } catch (err) {
+    console.error('GET /users/me/handicap error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/users/me/handicap/calculate — recalculate USGA handicap index
+router.post('/me/handicap/calculate', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+
+    // Get last 20 completed rounds with courseRating and slopeRating set
+    const userScores = await prisma.score.findMany({
+      where: { userId },
+      include: {
+        round: {
+          include: { holes: true },
+        },
+      },
+      orderBy: { round: { date: 'desc' } },
+    });
+
+    // Group scores by round and filter rounds that have courseRating + courseSlope
+    const roundMap = new Map<string, { round: typeof userScores[0]['round']; scores: typeof userScores }>();
+    for (const score of userScores) {
+      if (!roundMap.has(score.roundId)) {
+        roundMap.set(score.roundId, { round: score.round, scores: [] });
+      }
+      roundMap.get(score.roundId)!.scores.push(score);
+    }
+
+    const eligibleRounds = Array.from(roundMap.values()).filter(
+      r => r.round.isComplete && r.round.courseRating !== null && r.round.courseSlope !== null
+    );
+
+    if (eligibleRounds.length < 3) {
+      res.status(400).json({ error: 'At least 3 completed rounds with course rating/slope are required' });
+      return;
+    }
+
+    // Take at most 20 most recent
+    const recent = eligibleRounds.slice(0, 20);
+
+    // Calculate score differential for each round
+    const differentials = recent.map(r => {
+      const grossScore   = r.scores.reduce((sum, s) => sum + s.strokes, 0);
+      const courseRating = r.round.courseRating!;
+      const slopeRating  = r.round.courseSlope!;
+      const differential = (grossScore - courseRating) * 113 / slopeRating;
+      return { roundId: r.round.id, grossScore, courseRating, slopeRating, differential: Math.round(differential * 10) / 10 };
+    });
+
+    // Determine how many differentials to use
+    const n = recent.length;
+    let useCount: number;
+    if      (n <= 5)  useCount = 1;
+    else if (n === 6) useCount = 2;
+    else if (n <= 8)  useCount = 2;
+    else if (n <= 11) useCount = 3;
+    else if (n <= 14) useCount = 4;
+    else if (n <= 16) useCount = 5;
+    else if (n <= 18) useCount = 6;
+    else if (n === 19) useCount = 7;
+    else               useCount = 8;
+
+    const sorted   = [...differentials].sort((a, b) => a.differential - b.differential);
+    const lowest   = sorted.slice(0, useCount);
+    const avgDiff  = lowest.reduce((sum, d) => sum + d.differential, 0) / useCount;
+    const handicapIndex = Math.round(avgDiff * 0.96 * 10) / 10;
+
+    // Save HandicapRecord
+    await prisma.handicapRecord.create({
+      data: { userId, handicapIndex, roundsUsed: n },
+    });
+
+    // Update user.handicapIndex
+    await prisma.user.update({
+      where: { id: userId },
+      data:  { handicapIndex },
+    });
+
+    res.json({ data: { handicapIndex, roundsUsed: n, differentials } });
+  } catch (err) {
+    console.error('POST /users/me/handicap/calculate error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/users/search?q=  — search users by name or username
 router.get('/search', authenticate, async (req: AuthRequest, res: Response) => {
   const q = (req.query.q as string || '').trim();

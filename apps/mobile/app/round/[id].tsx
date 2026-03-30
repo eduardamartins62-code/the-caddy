@@ -6,9 +6,9 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useRound, useScorecard } from '../../hooks/useQueries';
-import { scoresApi } from '../../services/api';
+import { scoresApi, roundsApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import AvatarRing from '../../components/ui/AvatarRing';
 import GlassCard from '../../components/ui/GlassCard';
@@ -17,11 +17,30 @@ import { Colors, Radius, Spacing } from '../../constants/theme';
 
 // ─── Socket placeholder ────────────────────────────────────────────────────────
 // TODO: import { socket } from '../../services/socket';
-// On submit: socket.emit('score:update', { roundId, userId, holeNumber, strokes });
-// On receive: socket.on('score:update', () => queryClient.invalidateQueries(['scorecard', id]));
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Score color helpers (per spec) ──────────────────────────────────────────
 
+function holeScoreBgSolid(strokes: number, par: number): string {
+  if (strokes === 0) return 'transparent';
+  const rel = strokes - par;
+  if (rel <= -2) return '#FFD700'; // eagle or better — gold
+  if (rel === -1) return '#E8365D'; // birdie — red/pink
+  if (rel === 0)  return '#3A3A4A'; // par — light grey
+  if (rel === 1)  return '#4A90D9'; // bogey — light blue
+  if (rel === 2)  return '#2C5F8A'; // double bogey — dark blue
+  return '#1A1A2E';                 // triple+ — dark brown/dark
+}
+
+function holeScoreTextColor(strokes: number, par: number): string {
+  if (strokes === 0) return Colors.textMuted;
+  const rel = strokes - par;
+  if (rel <= -2) return '#1A1A2E'; // dark text on gold
+  if (rel === -1) return '#FFFFFF';
+  if (rel === 0)  return Colors.textPrimary;
+  return '#FFFFFF';
+}
+
+// Legacy color helper used in summary + number pad
 function holeScoreColor(strokes: number, par: number): string {
   if (strokes === 0) return Colors.textMuted;
   const rel = strokes - par;
@@ -32,7 +51,7 @@ function holeScoreColor(strokes: number, par: number): string {
   return Colors.doubleBogey;
 }
 
-function holeScoreBg(strokes: number, par: number): string {
+function holeScoreBgLegacy(strokes: number, par: number): string {
   if (strokes === 0) return 'transparent';
   const rel = strokes - par;
   if (rel <= -2) return Colors.purple + '28';
@@ -90,70 +109,188 @@ interface PadState {
   current:     number;
 }
 
+interface ScoreExtras {
+  fairwayHit?: boolean | null;
+  greenInReg?: boolean;
+  putts?:      number;
+}
+
 interface NumberPadProps extends PadState {
   visible:    boolean;
   onClose:    () => void;
-  onSubmit:   (strokes: number) => void;
+  onSubmit:   (strokes: number, extras: ScoreExtras) => void;
   submitting: boolean;
 }
 
 function NumberPad({ visible, holeNumber, par, current, playerName, onClose, onSubmit, submitting }: NumberPadProps) {
-  const [sel, setSel] = useState(current || par);
+  const [sel, setSel]             = useState(current || par);
+  const [phase, setPhase]         = useState<'score' | 'extras'>('score');
+  const [fairwayHit, setFairwayHit] = useState<boolean | null>(null);
+  const [greenInReg, setGreenInReg] = useState<boolean | null>(null);
+  const [putts, setPutts]         = useState(2);
 
   React.useEffect(() => {
-    if (visible) setSel(current || par);
+    if (visible) {
+      setSel(current || par);
+      setPhase('score');
+      setFairwayHit(null);
+      setGreenInReg(null);
+      setPutts(2);
+    }
   }, [visible, current, par]);
 
   const color = holeScoreColor(sel, par);
   const rel   = sel > 0 ? sel - par : 0;
+  const showFir = par >= 4; // FIR only for par 4 and 5
+
+  function handleScoreSave() {
+    if (sel === 0) return;
+    setPhase('extras');
+  }
+
+  function handleExtrasSave() {
+    onSubmit(sel, {
+      fairwayHit: showFir ? fairwayHit ?? undefined : undefined,
+      greenInReg: greenInReg ?? undefined,
+      putts,
+    });
+  }
+
+  function handleSkipExtras() {
+    onSubmit(sel, {});
+  }
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={np.overlay}>
         <View style={np.sheet}>
           <View style={np.handle} />
-          <Text style={np.holeName}>Hole {holeNumber}</Text>
-          <Text style={np.parText}>Par {par}  ·  {playerName}</Text>
 
-          <View style={[np.scoreBox, { borderColor: color + '66' }]}>
-            <Text style={[np.scoreNum, { color }]}>{sel || '—'}</Text>
-            {sel > 0 && <Text style={[np.scoreRel, { color }]}>{relLabel(rel)}</Text>}
-          </View>
+          {phase === 'score' ? (
+            <>
+              <Text style={np.holeName}>Hole {holeNumber}</Text>
+              <Text style={np.parText}>Par {par}  ·  {playerName}</Text>
 
-          <View style={np.grid}>
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => {
-              const c  = holeScoreColor(n, par);
-              const bg = holeScoreBg(n, par);
-              const isActive = sel === n;
-              return (
-                <TouchableOpacity
-                  key={n}
-                  style={[np.numBtn, { backgroundColor: isActive ? c + '30' : bg }, isActive && { borderColor: c, borderWidth: 2 }]}
-                  onPress={() => setSel(n)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[np.numText, { color: c }]}>{n}</Text>
+              <View style={[np.scoreBox, { borderColor: color + '66' }]}>
+                <Text style={[np.scoreNum, { color }]}>{sel || '—'}</Text>
+                {sel > 0 && <Text style={[np.scoreRel, { color }]}>{relLabel(rel)}</Text>}
+              </View>
+
+              <View style={np.grid}>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => {
+                  const c  = holeScoreColor(n, par);
+                  const bg = holeScoreBgLegacy(n, par);
+                  const isActive = sel === n;
+                  return (
+                    <TouchableOpacity
+                      key={n}
+                      style={[np.numBtn, { backgroundColor: isActive ? c + '30' : bg }, isActive && { borderColor: c, borderWidth: 2 }]}
+                      onPress={() => setSel(n)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[np.numText, { color: c }]}>{n}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View style={np.actions}>
+                <TouchableOpacity style={np.cancelBtn} onPress={onClose}>
+                  <Text style={np.cancelText}>Cancel</Text>
                 </TouchableOpacity>
-              );
-            })}
-          </View>
+                <TouchableOpacity
+                  style={[np.saveBtn, (submitting || sel === 0) && { opacity: 0.55 }]}
+                  onPress={handleScoreSave}
+                  disabled={submitting || sel === 0}
+                  activeOpacity={0.8}
+                >
+                  <Text style={np.saveText}>Next →</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={np.holeName}>Hole {holeNumber} — Quick Stats</Text>
+              <Text style={np.parText}>Score: {sel} ({relLabel(rel)})  ·  Optional</Text>
 
-          <View style={np.actions}>
-            <TouchableOpacity style={np.cancelBtn} onPress={onClose}>
-              <Text style={np.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[np.saveBtn, (submitting || sel === 0) && { opacity: 0.55 }]}
-              onPress={() => onSubmit(sel)}
-              disabled={submitting || sel === 0}
-              activeOpacity={0.8}
-            >
-              {submitting
-                ? <ActivityIndicator size="small" color={Colors.bg} />
-                : <Text style={np.saveText}>Save Score</Text>
-              }
-            </TouchableOpacity>
-          </View>
+              {/* FIR — only for par 4/5 */}
+              {showFir && (
+                <View style={np.extrasRow}>
+                  <Text style={np.extrasLabel}>Fairway Hit (FIR)</Text>
+                  <View style={np.btnPair}>
+                    <TouchableOpacity
+                      style={[np.toggleBtn, fairwayHit === true && np.toggleBtnActive]}
+                      onPress={() => setFairwayHit(fairwayHit === true ? null : true)}
+                    >
+                      <Text style={[np.toggleText, fairwayHit === true && np.toggleTextActive]}>✓</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[np.toggleBtn, fairwayHit === false && np.toggleBtnDanger]}
+                      onPress={() => setFairwayHit(fairwayHit === false ? null : false)}
+                    >
+                      <Text style={[np.toggleText, fairwayHit === false && np.toggleTextActive]}>✗</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* GIR — all holes */}
+              <View style={np.extrasRow}>
+                <Text style={np.extrasLabel}>Green in Reg (GIR)</Text>
+                <View style={np.btnPair}>
+                  <TouchableOpacity
+                    style={[np.toggleBtn, greenInReg === true && np.toggleBtnActive]}
+                    onPress={() => setGreenInReg(greenInReg === true ? null : true)}
+                  >
+                    <Text style={[np.toggleText, greenInReg === true && np.toggleTextActive]}>✓</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[np.toggleBtn, greenInReg === false && np.toggleBtnDanger]}
+                    onPress={() => setGreenInReg(greenInReg === false ? null : false)}
+                  >
+                    <Text style={[np.toggleText, greenInReg === false && np.toggleTextActive]}>✗</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Putts stepper */}
+              <View style={np.extrasRow}>
+                <Text style={np.extrasLabel}>Putts</Text>
+                <View style={np.stepper}>
+                  <TouchableOpacity
+                    style={np.stepBtn}
+                    onPress={() => setPutts(Math.max(0, putts - 1))}
+                  >
+                    <Text style={np.stepText}>−</Text>
+                  </TouchableOpacity>
+                  <Text style={np.stepValue}>{putts}</Text>
+                  <TouchableOpacity
+                    style={np.stepBtn}
+                    onPress={() => setPutts(Math.min(6, putts + 1))}
+                  >
+                    <Text style={np.stepText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={[np.actions, { marginTop: 20 }]}>
+                <TouchableOpacity style={np.cancelBtn} onPress={handleSkipExtras}>
+                  <Text style={np.cancelText}>Skip</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[np.saveBtn, submitting && { opacity: 0.55 }]}
+                  onPress={handleExtrasSave}
+                  disabled={submitting}
+                  activeOpacity={0.8}
+                >
+                  {submitting
+                    ? <ActivityIndicator size="small" color={Colors.bg} />
+                    : <Text style={np.saveText}>Save Score</Text>
+                  }
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
         </View>
       </View>
     </Modal>
@@ -177,9 +314,118 @@ const np = StyleSheet.create({
   cancelText:{ color: Colors.textSecondary, fontSize: 15, fontWeight: '600' },
   saveBtn:   { flex: 2, height: 50, borderRadius: Radius.pill, backgroundColor: Colors.lime, alignItems: 'center', justifyContent: 'center' },
   saveText:  { color: Colors.bg, fontSize: 15, fontWeight: '800' },
+  // extras
+  extrasRow:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  extrasLabel:   { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  btnPair:       { flexDirection: 'row', gap: 8 },
+  toggleBtn:     { width: 44, height: 36, borderRadius: Radius.md, borderWidth: 1.5, borderColor: Colors.cardBorder, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.bgTertiary },
+  toggleBtnActive: { backgroundColor: Colors.lime + '30', borderColor: Colors.lime },
+  toggleBtnDanger: { backgroundColor: Colors.error + '30', borderColor: Colors.error },
+  toggleText:    { color: Colors.textSecondary, fontSize: 16, fontWeight: '700' },
+  toggleTextActive: { color: Colors.textPrimary },
+  stepper:       { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  stepBtn:       { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.bgTertiary, borderWidth: 1.5, borderColor: Colors.cardBorder, alignItems: 'center', justifyContent: 'center' },
+  stepText:      { color: Colors.lime, fontSize: 20, fontWeight: '700', lineHeight: 22 },
+  stepValue:     { color: Colors.textPrimary, fontSize: 22, fontWeight: '800', minWidth: 28, textAlign: 'center' },
+});
+
+// ─── Skins table ──────────────────────────────────────────────────────────────
+
+function SkinsTable({ skins }: { skins: any[] }) {
+  if (!skins?.length) {
+    return (
+      <View style={betStyles.empty}>
+        <Text style={betStyles.emptyText}>No skins data available</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={betStyles.skinsTable}>
+      <View style={betStyles.skinsHeader}>
+        <Text style={[betStyles.skinsCell, betStyles.skinsCellHole]}>Hole</Text>
+        <Text style={[betStyles.skinsCell, betStyles.skinsCellWinner]}>Winner</Text>
+        <Text style={[betStyles.skinsCell, betStyles.skinsCellScore]}>Score</Text>
+        <Text style={[betStyles.skinsCell, betStyles.skinsCellSkins]}>Skins</Text>
+      </View>
+      {skins.map((s: any, idx: number) => {
+        const isCarry = !s.winner;
+        return (
+          <View
+            key={idx}
+            style={[
+              betStyles.skinsRow,
+              isCarry && betStyles.skinsRowCarry,
+              idx % 2 === 0 && betStyles.skinsRowAlt,
+            ]}
+          >
+            <Text style={[betStyles.skinsCell, betStyles.skinsCellHole, betStyles.skinsCellData]}>{s.holeNumber ?? idx + 1}</Text>
+            <Text style={[betStyles.skinsCell, betStyles.skinsCellWinner, betStyles.skinsCellData, isCarry && betStyles.carryText]}>
+              {isCarry ? '⚡ Carry' : (s.winner?.name ?? s.winnerName ?? '–')}
+            </Text>
+            <Text style={[betStyles.skinsCell, betStyles.skinsCellScore, betStyles.skinsCellData]}>{s.score ?? '–'}</Text>
+            <Text style={[betStyles.skinsCell, betStyles.skinsCellSkins, betStyles.skinsCellData, !isCarry && { color: Colors.lime }]}>
+              {s.skinsWon ?? (isCarry ? 'Carry' : 1)}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// ─── Nassau cards ─────────────────────────────────────────────────────────────
+
+function NassauCards({ nassau }: { nassau: any }) {
+  if (!nassau) {
+    return (
+      <View style={betStyles.empty}>
+        <Text style={betStyles.emptyText}>No Nassau data available</Text>
+      </View>
+    );
+  }
+  const cards = [
+    { label: 'Front 9',  winner: nassau.front9Winner,   score: nassau.front9Score   },
+    { label: 'Back 9',   winner: nassau.back9Winner,    score: nassau.back9Score    },
+    { label: 'Overall',  winner: nassau.overallWinner,  score: nassau.overallScore  },
+  ];
+  return (
+    <View style={betStyles.nassauRow}>
+      {cards.map((c) => (
+        <View key={c.label} style={betStyles.nassauCard}>
+          <Text style={betStyles.nassauLabel}>{c.label}</Text>
+          <Text style={betStyles.nassauWinner} numberOfLines={1}>{c.winner?.name ?? c.winner ?? '–'}</Text>
+          {c.score != null && <Text style={betStyles.nassauScore}>{c.score > 0 ? `+${c.score}` : c.score}</Text>}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const betStyles = StyleSheet.create({
+  empty:        { paddingVertical: 20, alignItems: 'center' },
+  emptyText:    { color: Colors.textMuted, fontSize: 13 },
+  skinsTable:   { borderRadius: Radius.md, overflow: 'hidden', borderWidth: 1, borderColor: Colors.cardBorder },
+  skinsHeader:  { flexDirection: 'row', backgroundColor: Colors.bgTertiary, paddingVertical: 8 },
+  skinsRow:     { flexDirection: 'row', paddingVertical: 8 },
+  skinsRowAlt:  { backgroundColor: Colors.bg },
+  skinsRowCarry:{ backgroundColor: Colors.purple + '12' },
+  skinsCell:    { paddingHorizontal: 8, fontSize: 12, color: Colors.textSecondary, fontWeight: '600' },
+  skinsCellHole:    { width: 44, textAlign: 'center' },
+  skinsCellWinner:  { flex: 1 },
+  skinsCellScore:   { width: 50, textAlign: 'center' },
+  skinsCellSkins:   { width: 50, textAlign: 'center' },
+  skinsCellData:    { color: Colors.textPrimary, fontWeight: '500', fontSize: 13 },
+  carryText:        { color: Colors.purple, fontWeight: '700' },
+  nassauRow:    { flexDirection: 'row', gap: 8 },
+  nassauCard:   { flex: 1, backgroundColor: Colors.bgTertiary, borderRadius: Radius.md, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: Colors.cardBorder },
+  nassauLabel:  { color: Colors.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 0.5, marginBottom: 6 },
+  nassauWinner: { color: Colors.textPrimary, fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  nassauScore:  { color: Colors.lime, fontSize: 11, fontWeight: '600', marginTop: 2 },
 });
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
+
+type RoundTab = 'scorecard' | 'bets';
 
 export default function RoundDetailScreen() {
   const { id }   = useLocalSearchParams<{ id: string }>();
@@ -191,21 +437,34 @@ export default function RoundDetailScreen() {
   const { data: round, isLoading: roundLoading, isError: roundError, refetch: refetchRound } = useRound(id);
   const { data: scorecard, isLoading: scLoading, refetch: refetchSc } = useScorecard(id);
 
-  const [refreshing, setRefreshing] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [pad, setPad]               = useState<PadState | null>(null);
-  const [padOpen, setPadOpen]       = useState(false);
+  const [refreshing, setRefreshing]   = useState(false);
+  const [submitting, setSubmitting]   = useState(false);
+  const [pad, setPad]                 = useState<PadState | null>(null);
+  const [padOpen, setPadOpen]         = useState(false);
+  const [activeTab, setActiveTab]     = useState<RoundTab>('scorecard');
+
+  // Bets queries — lazy, only when Bets tab is active
+  const { data: skinsData, isLoading: skinsLoading } = useQuery({
+    queryKey: ['skins', id],
+    queryFn: () => (roundsApi as any).getSkins(id),
+    enabled: !!id && activeTab === 'bets',
+    retry: false,
+  });
+  const { data: nassauData, isLoading: nassauLoading } = useQuery({
+    queryKey: ['nassau', id],
+    queryFn: () => (roundsApi as any).getNassau(id),
+    enabled: !!id && activeTab === 'bets',
+    retry: false,
+  });
 
   const isAdmin = user?.role === 'SCOREKEEPER' || user?.role === 'SUPER_ADMIN';
 
-  // Players list
   const players: any[] = useMemo(() => {
-    if (scorecard?.players?.length)      return scorecard.players;
-    if (round?.participants?.length)     return round.participants;
+    if (scorecard?.players?.length)  return scorecard.players;
+    if (round?.participants?.length) return round.participants;
     return [];
   }, [scorecard, round]);
 
-  // Hole list
   const holes: any[] = useMemo(() => {
     if (scorecard?.holes?.length) return scorecard.holes;
     return Array.from({ length: 18 }, (_, i) => ({
@@ -215,7 +474,6 @@ export default function RoundDetailScreen() {
     }));
   }, [scorecard]);
 
-  // Score lookup map: holeNumber -> userId -> strokes
   const scoreMap = useMemo(() => {
     const map: Record<number, Record<string, number>> = {};
     (scorecard?.scores ?? []).forEach((s: any) => {
@@ -235,26 +493,40 @@ export default function RoundDetailScreen() {
     return g > 0 ? g - handicap : 0;
   }
 
+  // Running total vs par — how many holes have been played by the current user
+  const myId = user?.id ?? '';
+  const myHolesPlayed = useMemo(() => holes.filter((h) => (scoreMap[h.holeNumber]?.[myId] ?? 0) > 0), [holes, scoreMap, myId]);
+  const myGrossThru   = useMemo(() => myHolesPlayed.reduce((s, h) => s + (scoreMap[h.holeNumber]?.[myId] ?? 0), 0), [myHolesPlayed, scoreMap, myId]);
+  const myParThru     = useMemo(() => myHolesPlayed.reduce((s, h) => s + (h.par ?? 4), 0), [myHolesPlayed]);
+  const myRelThru     = myGrossThru - myParThru;
+
   // ─── Score pad ────────────────────────────────────────────────────────
 
   function openPad(holeNumber: number, holePar: number, userId: string, playerName: string) {
     if (!isAdmin && userId !== user?.id) return;
     setPad({
       holeNumber,
-      par:        holePar,
+      par:     holePar,
       userId,
       playerName,
-      current:    scoreMap[holeNumber]?.[userId] ?? 0,
+      current: scoreMap[holeNumber]?.[userId] ?? 0,
     });
     setPadOpen(true);
   }
 
-  async function submitScore(strokes: number) {
+  async function submitScore(strokes: number, extras: ScoreExtras) {
     if (!pad) return;
     setSubmitting(true);
     try {
-      await scoresApi.submit({ roundId: id, userId: pad.userId, holeNumber: pad.holeNumber, strokes });
-      // TODO: socket.emit('score:update', { roundId: id, ...pad, strokes });
+      await scoresApi.submit({
+        roundId: id,
+        userId: pad.userId,
+        holeNumber: pad.holeNumber,
+        strokes,
+        ...(extras.fairwayHit !== undefined && { fairwayHit: extras.fairwayHit }),
+        ...(extras.greenInReg !== undefined && { greenInReg: extras.greenInReg }),
+        ...(extras.putts      !== undefined && { putts: extras.putts }),
+      } as any);
       qc.invalidateQueries({ queryKey: ['scorecard', id] });
       setPadOpen(false);
     } catch (e: any) {
@@ -289,9 +561,10 @@ export default function RoundDetailScreen() {
     );
   }
 
-  const sc = statusColors(round.status ?? 'UPCOMING');
-  const front9 = holes.filter((h) => h.holeNumber <= 9);
-  const back9  = holes.filter((h) => h.holeNumber > 9);
+  const sc       = statusColors(round.status ?? 'UPCOMING');
+  const front9   = holes.filter((h) => h.holeNumber <= 9);
+  const back9    = holes.filter((h) => h.holeNumber > 9);
+  const isComplete = round.status === 'COMPLETED' || round.status === 'COMPLETE' || round.isComplete;
 
   // ─── Grid components ────────────────────────────────────────────────────
 
@@ -334,17 +607,22 @@ export default function RoundDetailScreen() {
 
         {list.map((h) => {
           const strokes = scoreMap[h.holeNumber]?.[uid] ?? 0;
-          const bg  = holeScoreBg(strokes, h.par ?? 4);
-          const col = holeScoreColor(strokes, h.par ?? 4);
+          const bgColor  = holeScoreBgSolid(strokes, h.par ?? 4);
+          const txtColor = holeScoreTextColor(strokes, h.par ?? 4);
           return (
             <TouchableOpacity
               key={h.holeNumber}
-              style={[styles.holeCol, styles.holeCellBtn, { backgroundColor: bg }, !canEdit && { opacity: 0.45 }]}
+              style={[
+                styles.holeCol,
+                styles.holeCellBtn,
+                { backgroundColor: bgColor },
+                !canEdit && { opacity: 0.45 },
+              ]}
               onPress={() => openPad(h.holeNumber, h.par ?? 4, uid, name)}
               disabled={!canEdit}
               activeOpacity={0.7}
             >
-              <Text style={[styles.holeScore, { color: strokes > 0 ? col : Colors.textMuted }]}>
+              <Text style={[styles.holeScore, { color: txtColor }]}>
                 {strokes > 0 ? strokes : '·'}
               </Text>
             </TouchableOpacity>
@@ -448,70 +726,138 @@ export default function RoundDetailScreen() {
         </View>
       </View>
 
-      {/* Score grid */}
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.lime} />}
-        showsVerticalScrollIndicator={false}
-      >
-        {players.length === 0 && (
-          <View style={styles.emptyState}>
-            <Ionicons name="people-outline" size={40} color={Colors.textMuted} />
-            <Text style={styles.emptyText}>No players in this round.</Text>
-          </View>
-        )}
+      {/* Tab switcher */}
+      <View style={styles.tabBar}>
+        {(['scorecard', 'bets'] as RoundTab[]).map((t) => (
+          <TouchableOpacity
+            key={t}
+            style={[styles.tabBtn, activeTab === t && styles.tabBtnActive]}
+            onPress={() => setActiveTab(t)}
+          >
+            <Text style={[styles.tabBtnText, activeTab === t && styles.tabBtnTextActive]}>
+              {t === 'scorecard' ? 'Scorecard' : 'Bets'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
-        {players.length > 0 && (
-          <>
-            <NineSection label="Front 9" list={front9} />
-            {back9.length > 0 && <NineSection label="Back 9" list={back9} />}
+      {activeTab === 'scorecard' ? (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.lime} />}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Running total indicator */}
+          {myHolesPlayed.length > 0 && (
+            <View style={styles.thruBar}>
+              <Text style={styles.thruText}>
+                THRU {myHolesPlayed.length}
+                {'  '}
+                <Text style={[styles.thruRel, { color: myRelThru < 0 ? Colors.birdie : myRelThru === 0 ? Colors.par : Colors.bogey }]}>
+                  {relLabel(myRelThru)}
+                </Text>
+              </Text>
+            </View>
+          )}
 
-            {/* Totals summary */}
-            <GlassCard style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Round Summary</Text>
-              {players.map((player) => {
-                const uid      = player.userId ?? player.id;
-                const name     = player.user?.name ?? player.name ?? 'Unknown';
-                const avatar   = player.user?.avatar ?? player.avatar;
-                const handicap = player.user?.handicap ?? player.handicap ?? 0;
-                const gross    = playerGross(uid);
-                const net      = playerNet(uid, handicap);
-                const rel      = gross > 0 ? gross - par : null;
-                return (
-                  <View key={uid} style={styles.summaryRow}>
-                    <AvatarRing uri={avatar} name={name} size={32} ring="none" />
-                    <Text style={styles.summaryName} numberOfLines={1}>{name}</Text>
-                    <View style={styles.summaryScores}>
-                      {gross > 0 ? (
-                        <>
-                          <View style={styles.scoreChip}>
-                            <Text style={styles.scoreChipLabel}>Gross</Text>
-                            <Text style={styles.scoreChipValue}>{gross}</Text>
-                          </View>
-                          <View style={styles.scoreChip}>
-                            <Text style={styles.scoreChipLabel}>Net</Text>
-                            <Text style={styles.scoreChipValue}>{net}</Text>
-                          </View>
-                          <View style={[styles.scoreChip, styles.scoreChipRel]}>
-                            <Text style={[styles.scoreChipValue, {
-                              color: rel === 0 ? Colors.par : rel! < 0 ? Colors.birdie : Colors.bogey,
-                            }]}>
-                              {relLabel(rel!)}
-                            </Text>
-                          </View>
-                        </>
-                      ) : (
-                        <Text style={styles.totalDash}>No scores</Text>
-                      )}
+          {players.length === 0 && (
+            <View style={styles.emptyState}>
+              <Ionicons name="people-outline" size={40} color={Colors.textMuted} />
+              <Text style={styles.emptyText}>No players in this round.</Text>
+            </View>
+          )}
+
+          {players.length > 0 && (
+            <>
+              <NineSection label="Front 9" list={front9} />
+              {back9.length > 0 && <NineSection label="Back 9" list={back9} />}
+
+              {/* Totals summary */}
+              <GlassCard style={styles.summaryCard}>
+                <Text style={styles.summaryTitle}>Round Summary</Text>
+                {players.map((player) => {
+                  const uid      = player.userId ?? player.id;
+                  const name     = player.user?.name ?? player.name ?? 'Unknown';
+                  const avatar   = player.user?.avatar ?? player.avatar;
+                  const handicap = player.user?.handicap ?? player.handicap ?? 0;
+                  const gross    = playerGross(uid);
+                  const net      = playerNet(uid, handicap);
+                  const rel      = gross > 0 ? gross - par : null;
+                  return (
+                    <View key={uid} style={styles.summaryRow}>
+                      <AvatarRing uri={avatar} name={name} size={32} ring="none" />
+                      <Text style={styles.summaryName} numberOfLines={1}>{name}</Text>
+                      <View style={styles.summaryScores}>
+                        {gross > 0 ? (
+                          <>
+                            <View style={styles.scoreChip}>
+                              <Text style={styles.scoreChipLabel}>Gross</Text>
+                              <Text style={styles.scoreChipValue}>{gross}</Text>
+                            </View>
+                            <View style={styles.scoreChip}>
+                              <Text style={styles.scoreChipLabel}>Net</Text>
+                              <Text style={styles.scoreChipValue}>{net}</Text>
+                            </View>
+                            <View style={[styles.scoreChip, styles.scoreChipRel]}>
+                              <Text style={[styles.scoreChipValue, {
+                                color: rel === 0 ? Colors.par : rel! < 0 ? Colors.birdie : Colors.bogey,
+                              }]}>
+                                {relLabel(rel!)}
+                              </Text>
+                            </View>
+                          </>
+                        ) : (
+                          <Text style={styles.totalDash}>No scores</Text>
+                        )}
+                      </View>
                     </View>
-                  </View>
-                );
-              })}
-            </GlassCard>
-          </>
-        )}
-      </ScrollView>
+                  );
+                })}
+              </GlassCard>
+
+              {/* Round complete banner — Change 6 */}
+              {isComplete && (
+                <TouchableOpacity
+                  style={styles.statsBanner}
+                  onPress={() => router.push(`/round/stats?roundId=${id}` as any)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.statsBannerIcon}>📊</Text>
+                  <Text style={styles.statsBannerText}>View Round Stats</Text>
+                  <Ionicons name="chevron-forward" size={16} color={Colors.lime} />
+                </TouchableOpacity>
+              )}
+            </>
+          )}
+        </ScrollView>
+      ) : (
+        /* ── Bets tab ── */
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: Spacing.md, paddingBottom: insets.bottom + 40, gap: 16 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.lime} />}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Skins */}
+          <GlassCard>
+            <View style={styles.betSectionHeader}>
+              <Text style={styles.betSectionTitle}>Skins</Text>
+              {skinsLoading && <ActivityIndicator size="small" color={Colors.lime} />}
+            </View>
+            <SkinsTable skins={skinsData ?? []} />
+          </GlassCard>
+
+          {/* Nassau */}
+          <GlassCard>
+            <View style={styles.betSectionHeader}>
+              <Text style={styles.betSectionTitle}>Nassau</Text>
+              {nassauLoading && <ActivityIndicator size="small" color={Colors.lime} />}
+            </View>
+            <NassauCards nassau={nassauData} />
+          </GlassCard>
+        </ScrollView>
+      )}
 
       {/* Number pad modal */}
       {pad && (
@@ -560,6 +906,27 @@ const styles = StyleSheet.create({
   infoText: { color: Colors.textSecondary, fontSize: 13 },
   infoDot:  { color: Colors.textMuted, fontSize: 13 },
 
+  // Tab bar
+  tabBar: {
+    flexDirection: 'row',
+    borderBottomWidth: 1, borderBottomColor: Colors.cardBorder,
+  },
+  tabBtn: { flex: 1, paddingVertical: 11, alignItems: 'center' },
+  tabBtnActive: { borderBottomWidth: 2, borderBottomColor: Colors.lime },
+  tabBtnText: { color: Colors.textMuted, fontSize: 13, fontWeight: '600' },
+  tabBtnTextActive: { color: Colors.lime },
+
+  // Running total bar
+  thruBar: {
+    marginHorizontal: Spacing.md, marginTop: 10, marginBottom: 2,
+    backgroundColor: Colors.bgSecondary, borderRadius: Radius.md,
+    paddingVertical: 6, paddingHorizontal: 14,
+    borderWidth: 1, borderColor: Colors.cardBorder,
+    alignSelf: 'flex-start',
+  },
+  thruText: { color: Colors.textSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 0.8 },
+  thruRel:  { fontSize: 13, fontWeight: '800' },
+
   // Nine sections
   nineWrap:   { marginTop: 14, paddingHorizontal: Spacing.md },
   nineHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
@@ -594,6 +961,21 @@ const styles = StyleSheet.create({
   scoreChipRel:  { backgroundColor: 'transparent', borderWidth: 1, borderColor: Colors.cardBorder },
   scoreChipLabel:{ color: Colors.textMuted, fontSize: 9, fontWeight: '600', marginBottom: 2 },
   scoreChipValue:{ color: Colors.textPrimary, fontSize: 14, fontWeight: '800' },
+
+  // Stats banner (Change 6)
+  statsBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginHorizontal: Spacing.md, marginBottom: Spacing.md,
+    backgroundColor: Colors.limeDim,
+    borderRadius: Radius.lg, padding: 14,
+    borderWidth: 1, borderColor: Colors.lime + '44',
+  },
+  statsBannerIcon: { fontSize: 20 },
+  statsBannerText: { flex: 1, color: Colors.lime, fontSize: 15, fontWeight: '700' },
+
+  // Bets
+  betSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  betSectionTitle:  { color: Colors.textPrimary, fontSize: 16, fontWeight: '700' },
 
   // Empty / Error
   emptyState: { alignItems: 'center', paddingVertical: 60, gap: 12 },

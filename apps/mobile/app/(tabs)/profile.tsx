@@ -41,6 +41,7 @@ export default function ProfileTab() {
   const [editName, setEditName] = useState('');
   const [editUsername, setEditUsername] = useState('');
   const [editSaving, setEditSaving] = useState(false);
+  const [handicapLoading, setHandicapLoading] = useState(false);
 
   const userId = authUser?.id ?? '';
 
@@ -105,6 +106,22 @@ export default function ProfileTab() {
     setEditUsername(user?.username ?? '');
     setEditModalVisible(true);
   }, [user]);
+
+  // ─── Handicap calculation ─────────────────────────────────────────────────
+  const handleCalculateHandicap = useCallback(async () => {
+    try {
+      setHandicapLoading(true);
+      await usersApi.calculateHandicap();
+      await Promise.all([
+        refreshUser(),
+        qc.invalidateQueries({ queryKey: ['me'] }),
+      ]);
+    } catch (e: any) {
+      Alert.alert('Handicap error', e?.message ?? 'Could not calculate handicap. Please try again.');
+    } finally {
+      setHandicapLoading(false);
+    }
+  }, [refreshUser, qc]);
 
   const handleEditProfileSave = useCallback(async () => {
     try {
@@ -221,10 +238,32 @@ export default function ProfileTab() {
               </TouchableOpacity>
             </View>
 
-            {/* HCP + stats */}
+            {/* HCP display */}
+            <View style={styles.hcpRow}>
+              <View style={styles.hcpLeft}>
+                <Text style={styles.hcpValue}>
+                  {loading ? '–' : user.handicapIndex != null ? `HCP ${user.handicapIndex}` : (user.handicap != null ? `HCP ${user.handicap}` : 'HCP --')}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.hcpBtn}
+                onPress={handleCalculateHandicap}
+                disabled={handicapLoading}
+                activeOpacity={0.7}
+              >
+                {handicapLoading
+                  ? <ActivityIndicator size="small" color={Colors.lime} />
+                  : (
+                    <Text style={styles.hcpBtnText}>
+                      {(user.handicapIndex != null || user.handicap != null) ? '↻ Update' : 'Calculate'}
+                    </Text>
+                  )}
+              </TouchableOpacity>
+            </View>
+
+            {/* Stats row */}
             <View style={styles.heroStats}>
               {[
-                { label: 'HCP',    value: user.handicap?.toString() ?? '–', color: Colors.lime },
                 { label: 'Rounds', value: String(stats?.totalRounds ?? 0), color: Colors.purple },
                 { label: 'Best',   value: String(stats?.bestScore   ?? '–'), color: Colors.textPrimary },
                 { label: 'Avg',    value: stats?.averageScore ? stats.averageScore.toFixed(1) : '–', color: Colors.textPrimary },
@@ -493,7 +532,22 @@ const styles = StyleSheet.create({
   followLabel: { color: Colors.textMuted, fontSize: 11, fontWeight: '600', letterSpacing: 0.5, marginTop: 2 },
   followDivider: { width: 1, height: 32, backgroundColor: Colors.cardBorder },
 
-  heroStats: { flexDirection: 'row', marginTop: 20, paddingTop: 16, borderTopWidth: 1, borderTopColor: Colors.cardBorder },
+  hcpRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: Colors.cardBorder,
+  },
+  hcpLeft: { flex: 1 },
+  hcpValue: { color: Colors.lime, fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
+  hcpBtn: {
+    paddingHorizontal: 14, paddingVertical: 7,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.limeDim,
+    borderWidth: 1, borderColor: Colors.lime + '50',
+    minWidth: 80, alignItems: 'center', justifyContent: 'center',
+  },
+  hcpBtnText: { color: Colors.lime, fontSize: 13, fontWeight: '700' },
+
+  heroStats: { flexDirection: 'row', marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: Colors.cardBorder },
   heroStat: { flex: 1, alignItems: 'center' },
   heroStatValue: { fontSize: 20, fontWeight: '800' },
   heroStatLabel: { color: Colors.textMuted, fontSize: 10, fontWeight: '600', letterSpacing: 0.5, marginTop: 3 },
