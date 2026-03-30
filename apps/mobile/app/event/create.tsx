@@ -2,15 +2,16 @@ import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   TextInput, Alert, ActivityIndicator, KeyboardAvoidingView,
-  Platform,
+  Platform, Switch,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { eventsApi, usersApi } from '../../services/api';
 import GlassCard from '../../components/ui/GlassCard';
 import GradientButton from '../../components/ui/GradientButton';
 import AvatarRing from '../../components/ui/AvatarRing';
+import CourseSearchInput, { GolfCourse } from '../../components/ui/CourseSearchInput';
 import { Colors, Radius, Spacing } from '../../constants/theme';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -22,6 +23,24 @@ const EVENT_FORMATS = [
   { id: 'MATCH_PLAY',   label: 'Match Play',   sub: 'Hole-by-hole competition',      icon: 'flag-outline' },
   { id: 'STABLEFORD',  label: 'Stableford',   sub: 'Points-based scoring system',   icon: 'star-outline' },
 ];
+
+const EVENT_TYPES = [
+  { id: 'TOURNAMENT', label: 'Tournament', emoji: '🏆' },
+  { id: 'CASUAL',     label: 'Casual Round', emoji: '⛳' },
+  { id: 'WEEKEND',    label: 'Weekend Game', emoji: '🤝' },
+  { id: 'SOLO',       label: 'Solo Round',   emoji: '🚶' },
+] as const;
+
+type EventTypeId = typeof EVENT_TYPES[number]['id'];
+
+const RECURRENCE_OPTIONS = [
+  { id: 'ANNUAL',           label: 'Yearly' },
+  { id: 'SEMI_ANNUAL',      label: 'Semi-Yearly' },
+  { id: 'MONTHLY',          label: 'Monthly' },
+  { id: 'RECURRING_CUSTOM', label: 'Custom' },
+] as const;
+
+type RecurrenceId = typeof RECURRENCE_OPTIONS[number]['id'];
 
 const PLAYER_ROLES = [
   { id: 'PLAYER',      label: 'Player' },
@@ -92,6 +111,8 @@ const lb = StyleSheet.create({
 export default function CreateEventScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{ quickGame?: string }>();
+  const isQuickGame = params.quickGame === 'true';
 
   const [step, setStep] = useState(1);
   const [creating, setCreating] = useState(false);
@@ -100,11 +121,16 @@ export default function CreateEventScreen() {
   const [name, setName]               = useState('');
   const [description, setDescription] = useState('');
   const [courseName, setCourseName]   = useState('');
+  const [courseId, setCourseId]       = useState<string | null>(null);
+  const [eventType, setEventType]     = useState<EventTypeId>(isQuickGame ? 'CASUAL' : 'TOURNAMENT');
 
   // Step 2 - Schedule
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate]     = useState('');
-  const [format, setFormat]       = useState('STROKE_PLAY');
+  const [startDate, setStartDate]         = useState('');
+  const [endDate, setEndDate]             = useState('');
+  const [format, setFormat]               = useState('STROKE_PLAY');
+  const [isRecurring, setIsRecurring]     = useState(false);
+  const [recurrence, setRecurrence]       = useState<RecurrenceId>('ANNUAL');
+  const [recurrenceNote, setRecurrenceNote] = useState('');
 
   // Step 3 - Players
   const [playerSearch, setPlayerSearch]     = useState('');
@@ -112,6 +138,17 @@ export default function CreateEventScreen() {
   const [searching, setSearching]           = useState(false);
   const [selectedPlayers, setSelectedPlayers] = useState<SelectedPlayer[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ─── Effective total steps (skip step 3 for quick game) ──────────────────
+
+  // We always render 4 steps but skip step 3 navigation when quickGame=true
+  const effectiveTotalSteps = isQuickGame ? 3 : TOTAL_STEPS;
+
+  // Map display step to actual step: when quickGame, step 3 in display = step 4 (review)
+  function toActualStep(displayStep: number): number {
+    if (isQuickGame && displayStep >= 3) return displayStep + 1;
+    return displayStep;
+  }
 
   // ─── Validation ─────────────────────────────────────────────────────────
 
@@ -133,15 +170,30 @@ export default function CreateEventScreen() {
 
   function goNext() {
     if (!validateStep()) return;
-    setStep((s) => Math.min(s + 1, TOTAL_STEPS));
+    if (isQuickGame && step === 2) {
+      // Skip player selection step — jump straight to review (step 4)
+      setStep(4);
+    } else {
+      setStep((s) => Math.min(s + 1, TOTAL_STEPS));
+    }
   }
 
   function goBack() {
     if (step === 1) {
       router.back();
+    } else if (isQuickGame && step === 4) {
+      // Go back to step 2, skipping player selection
+      setStep(2);
     } else {
       setStep((s) => s - 1);
     }
+  }
+
+  // ─── Course selection ────────────────────────────────────────────────────
+
+  function handleCourseSelect(course: GolfCourse) {
+    setCourseName(course.name);
+    setCourseId(course.id);
   }
 
   // ─── Player search ──────────────────────────────────────────────────────
@@ -190,7 +242,7 @@ export default function CreateEventScreen() {
   // ─── Submit ─────────────────────────────────────────────────────────────
 
   async function handleCreate() {
-    if (selectedPlayers.length === 0) {
+    if (!isQuickGame && selectedPlayers.length === 0) {
       const proceed = await new Promise<boolean>((resolve) =>
         Alert.alert(
           'No participants',
@@ -210,6 +262,10 @@ export default function CreateEventScreen() {
         name: name.trim(),
         description: description.trim() || undefined,
         courseName: courseName.trim() || undefined,
+        courseId: courseId || undefined,
+        type: eventType,
+        recurrence: isRecurring ? recurrence : 'ONE_TIME',
+        recurrenceNote: isRecurring && recurrence === 'RECURRING_CUSTOM' ? recurrenceNote.trim() || undefined : undefined,
         startDate: startDate ? new Date(startDate).toISOString() : undefined,
         endDate:   endDate   ? new Date(endDate).toISOString()   : undefined,
         format,
@@ -265,17 +321,34 @@ export default function CreateEventScreen() {
         textAlignVertical="top"
       />
 
-      <Label optional>Course Name</Label>
-      <TextInput
-        style={styles.input}
+      {/* Event Type chips */}
+      <Label>Event Type</Label>
+      <View style={styles.chipRow}>
+        {EVENT_TYPES.map((et) => {
+          const active = eventType === et.id;
+          return (
+            <TouchableOpacity
+              key={et.id}
+              style={[styles.chip, active && styles.chipActive]}
+              onPress={() => setEventType(et.id)}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.chipEmoji}>{et.emoji}</Text>
+              <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>
+                {et.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Course search */}
+      <Label optional>Golf Course</Label>
+      <CourseSearchInput
         value={courseName}
-        onChangeText={setCourseName}
-        placeholder="Augusta National Golf Club"
-        placeholderTextColor={Colors.textMuted}
-        autoCapitalize="words"
-        returnKeyType="done"
+        onSelect={handleCourseSelect}
+        placeholder="Search for a golf course..."
       />
-      <Text style={styles.inputHint}>Start typing to search for a course</Text>
     </ScrollView>
   );
 
@@ -339,6 +412,59 @@ export default function CreateEventScreen() {
           );
         })}
       </View>
+
+      {/* Recurring event toggle */}
+      <View style={styles.recurringRow}>
+        <View style={styles.recurringLabelWrap}>
+          <Ionicons name="repeat-outline" size={18} color={Colors.textSecondary} />
+          <Text style={styles.recurringLabel}>Recurring Event</Text>
+        </View>
+        <Switch
+          value={isRecurring}
+          onValueChange={setIsRecurring}
+          trackColor={{ false: Colors.bgTertiary, true: Colors.limeDim }}
+          thumbColor={isRecurring ? Colors.lime : Colors.textMuted}
+          ios_backgroundColor={Colors.bgTertiary}
+        />
+      </View>
+
+      {isRecurring && (
+        <View style={styles.recurringOptions}>
+          <Text style={styles.recurringFreqLabel}>Frequency</Text>
+          <View style={styles.chipRow}>
+            {RECURRENCE_OPTIONS.map((opt) => {
+              const active = recurrence === opt.id;
+              return (
+                <TouchableOpacity
+                  key={opt.id}
+                  style={[styles.chip, active && styles.chipActive]}
+                  onPress={() => setRecurrence(opt.id)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {recurrence === 'RECURRING_CUSTOM' && (
+            <>
+              <Text style={styles.recurringFreqLabel}>Custom Recurrence Note</Text>
+              <TextInput
+                style={styles.input}
+                value={recurrenceNote}
+                onChangeText={setRecurrenceNote}
+                placeholder="e.g. Every other month on Saturdays"
+                placeholderTextColor={Colors.textMuted}
+                autoCapitalize="sentences"
+                returnKeyType="done"
+              />
+            </>
+          )}
+        </View>
+      )}
     </ScrollView>
   );
 
@@ -448,6 +574,7 @@ export default function CreateEventScreen() {
 
   const renderStep4 = () => {
     const selectedFormat = EVENT_FORMATS.find((f) => f.id === format);
+    const selectedEventType = EVENT_TYPES.find((t) => t.id === eventType);
     return (
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -469,11 +596,15 @@ export default function CreateEventScreen() {
           {endDate ? <SummaryRow icon="calendar-outline" label="End Date"    value={endDate} /> : null}
           <SummaryRow icon="location-outline"    label="Course"      value={courseName || '—'} />
           <SummaryRow icon="golf-outline"        label="Format"      value={selectedFormat?.label ?? format} />
-          <SummaryRow icon="people-outline"      label="Players"     value={selectedPlayers.length > 0 ? `${selectedPlayers.length} invited` : 'None yet'} />
+          <SummaryRow icon="trophy-outline"      label="Type"        value={selectedEventType ? `${selectedEventType.emoji} ${selectedEventType.label}` : eventType} />
+          <SummaryRow icon="repeat-outline"      label="Recurrence"  value={isRecurring ? (RECURRENCE_OPTIONS.find(r => r.id === recurrence)?.label ?? recurrence) : 'One-time'} />
+          {!isQuickGame && (
+            <SummaryRow icon="people-outline"    label="Players"     value={selectedPlayers.length > 0 ? `${selectedPlayers.length} invited` : 'None yet'} />
+          )}
         </GlassCard>
 
         {/* Player list preview */}
-        {selectedPlayers.length > 0 && (
+        {!isQuickGame && selectedPlayers.length > 0 && (
           <GlassCard style={{ marginBottom: 16 }}>
             <Text style={styles.summarySubTitle}>Invited Players</Text>
             {selectedPlayers.map(({ user, role }) => (
@@ -519,6 +650,9 @@ export default function CreateEventScreen() {
     }
   };
 
+  // Compute display step number for the indicator (quickGame collapses step 3 out)
+  const displayStep = isQuickGame && step === 4 ? 3 : step;
+
   // ─── Main render ────────────────────────────────────────────────────────
 
   return (
@@ -531,12 +665,14 @@ export default function CreateEventScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={goBack}>
           <Ionicons name="arrow-back" size={20} color={Colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Create Event</Text>
+        <Text style={styles.headerTitle}>
+          {isQuickGame ? 'Quick Game' : 'Create Event'}
+        </Text>
         <View style={{ width: 36 }} />
       </View>
 
       {/* Step indicator */}
-      <StepIndicator current={step} total={TOTAL_STEPS} />
+      <StepIndicator current={displayStep} total={effectiveTotalSteps} />
 
       {/* Step content */}
       <View style={{ flex: 1 }}>
@@ -546,7 +682,16 @@ export default function CreateEventScreen() {
       {/* Footer nav */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
         {step < TOTAL_STEPS && (
-          <TouchableOpacity style={styles.skipBtn} onPress={() => setStep((s) => s + 1)}>
+          <TouchableOpacity
+            style={styles.skipBtn}
+            onPress={() => {
+              if (isQuickGame && step === 2) {
+                setStep(4);
+              } else {
+                setStep((s) => s + 1);
+              }
+            }}
+          >
             <Text style={styles.skipText}>Skip</Text>
           </TouchableOpacity>
         )}
@@ -616,6 +761,23 @@ const styles = StyleSheet.create({
   inputMulti:    { height: 90, paddingTop: 12 },
   inputHint:     { color: Colors.textMuted, fontSize: 11, marginTop: -12, marginBottom: 16, marginLeft: 4 },
 
+  // Event type chips
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: Radius.full, borderWidth: 1.5,
+    borderColor: Colors.cardBorder,
+    backgroundColor: Colors.bgSecondary,
+  },
+  chipActive: {
+    borderColor: Colors.lime,
+    backgroundColor: Colors.limeDim,
+  },
+  chipEmoji:      { fontSize: 14 },
+  chipLabel:      { color: Colors.textSecondary, fontSize: 13, fontWeight: '600' },
+  chipLabelActive:{ color: Colors.lime },
+
   // Format
   formatGrid: { gap: 10, marginBottom: 8 },
   formatCard: {
@@ -628,6 +790,19 @@ const styles = StyleSheet.create({
   formatLabelActive:{ color: Colors.lime },
   formatSub:        { color: Colors.textSecondary, fontSize: 12 },
   formatCheck:      { position: 'absolute', top: 12, right: 12 },
+
+  // Recurring
+  recurringRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: Colors.bgSecondary,
+    borderWidth: 1.5, borderColor: Colors.cardBorder,
+    borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 12,
+    marginTop: 8, marginBottom: 8,
+  },
+  recurringLabelWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  recurringLabel:     { color: Colors.textPrimary, fontSize: 15, fontWeight: '600' },
+  recurringOptions:   { paddingTop: 4, paddingBottom: 8 },
+  recurringFreqLabel: { color: Colors.textSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 0.8, marginBottom: 10, marginTop: 8 },
 
   // Search
   searchWrap:   {
