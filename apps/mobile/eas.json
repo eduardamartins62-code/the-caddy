@@ -10,7 +10,13 @@
     },
     "preview": {
       "distribution": "internal",
-      "channel": "preview"
+      "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://the-caddy-production.up.railway.app/api",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "499811034496-55bh7hilijhqc4sl6dire0kek36ubdq5.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "499811034496-ltuiaqpjmf2cc8cpf4p3cokvgnm4p88b.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "499811034496-5j6iv2q4f3blsl4lbtjk9at5bkjcb82l.apps.googleusercontent.com"
+      }
     },
     "production": {
       "channel": "production",
