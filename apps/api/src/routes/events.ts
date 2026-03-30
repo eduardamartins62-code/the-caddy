@@ -17,7 +17,7 @@ router.get('/', async (_req, res: Response) => {
 });
 
 // POST /api/events
-router.post('/', authenticate, requireScorekeeper, async (req: AuthRequest, res: Response) => {
+router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   const {
     name, description, type = 'TOURNAMENT', recurrence = 'ONE_TIME',
     recurrenceNote, privacy = 'INVITE_ONLY', startDate, endDate,

@@ -2,8 +2,9 @@ import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   TextInput, Alert, ActivityIndicator, KeyboardAvoidingView,
-  Platform, Switch,
+  Platform, Switch, Modal,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -125,12 +126,24 @@ export default function CreateEventScreen() {
   const [eventType, setEventType]     = useState<EventTypeId>(isQuickGame ? 'CASUAL' : 'TOURNAMENT');
 
   // Step 2 - Schedule
-  const [startDate, setStartDate]         = useState('');
-  const [endDate, setEndDate]             = useState('');
+  const [startDate, setStartDate]         = useState<Date | null>(null);
+  const [endDate, setEndDate]             = useState<Date | null>(null);
   const [format, setFormat]               = useState('STROKE_PLAY');
   const [isRecurring, setIsRecurring]     = useState(false);
   const [recurrence, setRecurrence]       = useState<RecurrenceId>('ANNUAL');
   const [recurrenceNote, setRecurrenceNote] = useState('');
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker]     = useState(false);
+
+  function formatDateDisplay(d: Date | null) {
+    if (!d) return '';
+    return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  }
+
+  function formatDateISO(d: Date | null) {
+    if (!d) return undefined;
+    return d.toISOString();
+  }
 
   // Step 3 - Players
   const [playerSearch, setPlayerSearch]     = useState('');
@@ -160,7 +173,7 @@ export default function CreateEventScreen() {
       }
     }
     if (step === 2) {
-      if (!startDate.trim()) {
+      if (!startDate) {
         Alert.alert('Required', 'Start date is required.');
         return false;
       }
@@ -266,8 +279,8 @@ export default function CreateEventScreen() {
         type: eventType,
         recurrence: isRecurring ? recurrence : 'ONE_TIME',
         recurrenceNote: isRecurring && recurrence === 'RECURRING_CUSTOM' ? recurrenceNote.trim() || undefined : undefined,
-        startDate: startDate ? new Date(startDate).toISOString() : undefined,
-        endDate:   endDate   ? new Date(endDate).toISOString()   : undefined,
+        startDate: formatDateISO(startDate),
+        endDate:   formatDateISO(endDate),
         format,
         participants: selectedPlayers.map((p) => ({
           userId: p.user.id,
@@ -362,26 +375,53 @@ export default function CreateEventScreen() {
       <Text style={styles.stepSub}>When is the event and how will it be scored?</Text>
 
       <Label>Start Date</Label>
-      <TextInput
-        style={styles.input}
-        value={startDate}
-        onChangeText={setStartDate}
-        placeholder="YYYY-MM-DD (e.g. 2026-04-10)"
-        placeholderTextColor={Colors.textMuted}
-        keyboardType="numbers-and-punctuation"
-        returnKeyType="next"
-      />
+      <TouchableOpacity style={styles.datePicker} onPress={() => setShowStartPicker(true)} activeOpacity={0.75}>
+        <Ionicons name="calendar-outline" size={18} color={startDate ? Colors.lime : Colors.textMuted} />
+        <Text style={[styles.datePickerText, !startDate && styles.datePickerPlaceholder]}>
+          {startDate ? formatDateDisplay(startDate) : 'Select start date'}
+        </Text>
+        <Ionicons name="chevron-down-outline" size={16} color={Colors.textMuted} />
+      </TouchableOpacity>
+
+      {showStartPicker && (
+        <DateTimePicker
+          value={startDate || new Date()}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'inline' : 'default'}
+          minimumDate={new Date()}
+          onChange={(_e, date) => {
+            setShowStartPicker(Platform.OS === 'ios');
+            if (date) setStartDate(date);
+          }}
+          themeVariant="dark"
+        />
+      )}
 
       <Label optional>End Date</Label>
-      <TextInput
-        style={styles.input}
-        value={endDate}
-        onChangeText={setEndDate}
-        placeholder="YYYY-MM-DD (e.g. 2026-04-13)"
-        placeholderTextColor={Colors.textMuted}
-        keyboardType="numbers-and-punctuation"
-        returnKeyType="done"
-      />
+      <TouchableOpacity style={styles.datePicker} onPress={() => setShowEndPicker(true)} activeOpacity={0.75}>
+        <Ionicons name="calendar-outline" size={18} color={endDate ? Colors.lime : Colors.textMuted} />
+        <Text style={[styles.datePickerText, !endDate && styles.datePickerPlaceholder]}>
+          {endDate ? formatDateDisplay(endDate) : 'Select end date (optional)'}
+        </Text>
+        {endDate
+          ? <TouchableOpacity onPress={() => setEndDate(null)}><Ionicons name="close-circle" size={16} color={Colors.textMuted} /></TouchableOpacity>
+          : <Ionicons name="chevron-down-outline" size={16} color={Colors.textMuted} />
+        }
+      </TouchableOpacity>
+
+      {showEndPicker && (
+        <DateTimePicker
+          value={endDate || startDate || new Date()}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'inline' : 'default'}
+          minimumDate={startDate || new Date()}
+          onChange={(_e, date) => {
+            setShowEndPicker(Platform.OS === 'ios');
+            if (date) setEndDate(date);
+          }}
+          themeVariant="dark"
+        />
+      )}
 
       <Label>Scoring Format</Label>
       <View style={styles.formatGrid}>
@@ -592,8 +632,8 @@ export default function CreateEventScreen() {
 
           <View style={styles.summaryDivider} />
 
-          <SummaryRow icon="calendar-outline"    label="Start Date"  value={startDate || '—'} />
-          {endDate ? <SummaryRow icon="calendar-outline" label="End Date"    value={endDate} /> : null}
+          <SummaryRow icon="calendar-outline"    label="Start Date"  value={startDate ? formatDateDisplay(startDate) : '—'} />
+          {endDate ? <SummaryRow icon="calendar-outline" label="End Date"    value={formatDateDisplay(endDate)} /> : null}
           <SummaryRow icon="location-outline"    label="Course"      value={courseName || '—'} />
           <SummaryRow icon="golf-outline"        label="Format"      value={selectedFormat?.label ?? format} />
           <SummaryRow icon="trophy-outline"      label="Type"        value={selectedEventType ? `${selectedEventType.emoji} ${selectedEventType.label}` : eventType} />
@@ -658,7 +698,8 @@ export default function CreateEventScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.screen, { paddingTop: insets.top }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       {/* Header */}
       <View style={styles.header}>
@@ -760,6 +801,18 @@ const styles = StyleSheet.create({
   inputRequired: { borderColor: Colors.lime + '55' },
   inputMulti:    { height: 90, paddingTop: 12 },
   inputHint:     { color: Colors.textMuted, fontSize: 11, marginTop: -12, marginBottom: 16, marginLeft: 4 },
+
+  // Date picker button
+  datePicker: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: Colors.bgSecondary,
+    borderWidth: 1.5, borderColor: Colors.cardBorder,
+    borderRadius: Radius.md,
+    paddingHorizontal: 14, paddingVertical: 13,
+    marginBottom: 16,
+  },
+  datePickerText: { flex: 1, color: Colors.textPrimary, fontSize: 15 },
+  datePickerPlaceholder: { color: Colors.textMuted },
 
   // Event type chips
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
