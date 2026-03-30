@@ -303,75 +303,86 @@ export default function CreateEventScreen() {
   // ─── Render steps ────────────────────────────────────────────────────────
 
   const renderStep1 = () => (
-    <ScrollView
-      contentContainerStyle={styles.scroll}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1 }}
+      keyboardVerticalOffset={80}
     >
-      <Text style={styles.stepHeading}>Basic Information</Text>
-      <Text style={styles.stepSub}>Tell us about your event</Text>
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: 120 }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.stepHeading}>Basic Information</Text>
+        <Text style={styles.stepSub}>Tell us about your event</Text>
 
-      <Label>Event Name</Label>
-      <TextInput
-        style={[styles.input, !name.trim() && styles.inputRequired]}
-        value={name}
-        onChangeText={setName}
-        placeholder="Masters Weekend 2026"
-        placeholderTextColor={Colors.textMuted}
-        autoCapitalize="words"
-        returnKeyType="next"
-      />
+        <Label>Event Name</Label>
+        <TextInput
+          style={[styles.input, !name.trim() && styles.inputRequired]}
+          value={name}
+          onChangeText={setName}
+          placeholder="Masters Weekend 2026"
+          placeholderTextColor={Colors.textMuted}
+          autoCapitalize="words"
+          returnKeyType="next"
+        />
 
-      <Label optional>Description</Label>
-      <TextInput
-        style={[styles.input, styles.inputMulti]}
-        value={description}
-        onChangeText={setDescription}
-        placeholder="Add a description for your event..."
-        placeholderTextColor={Colors.textMuted}
-        multiline
-        numberOfLines={3}
-        textAlignVertical="top"
-      />
+        <Label optional>Description</Label>
+        <TextInput
+          style={[styles.input, styles.inputMulti]}
+          value={description}
+          onChangeText={setDescription}
+          placeholder="Add a description for your event..."
+          placeholderTextColor={Colors.textMuted}
+          multiline
+          numberOfLines={3}
+          textAlignVertical="top"
+        />
 
-      {/* Event Type chips */}
-      <Label>Event Type</Label>
-      <View style={styles.chipRow}>
-        {EVENT_TYPES.map((et) => {
-          const active = eventType === et.id;
-          return (
-            <TouchableOpacity
-              key={et.id}
-              style={[styles.chip, active && styles.chipActive]}
-              onPress={() => setEventType(et.id)}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.chipEmoji}>{et.emoji}</Text>
-              <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>
-                {et.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+        {/* Event Type chips */}
+        <Label>Event Type</Label>
+        <View style={styles.chipRow}>
+          {EVENT_TYPES.map((et) => {
+            const active = eventType === et.id;
+            return (
+              <TouchableOpacity
+                key={et.id}
+                style={[styles.chip, active && styles.chipActive]}
+                onPress={() => setEventType(et.id)}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.chipEmoji}>{et.emoji}</Text>
+                <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>
+                  {et.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-      {/* Course search */}
-      <Label optional>Golf Course</Label>
-      <CourseSearchInput
-        value={courseName}
-        onSelect={handleCourseSelect}
-        placeholder="Search for a golf course..."
-      />
-    </ScrollView>
+        {/* Course search */}
+        <Label optional>Golf Course</Label>
+        <CourseSearchInput
+          value={courseName}
+          onSelect={handleCourseSelect}
+          placeholder="Search for a golf course..."
+        />
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 
   const renderStep2 = () => (
-    <ScrollView
-      contentContainerStyle={styles.scroll}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1 }}
+      keyboardVerticalOffset={80}
     >
-      <Text style={styles.stepHeading}>Schedule & Format</Text>
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: 120 }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.stepHeading}>Schedule & Format</Text>
       <Text style={styles.stepSub}>When is the event and how will it be scored?</Text>
 
       <Label>Start Date</Label>
@@ -505,15 +516,20 @@ export default function CreateEventScreen() {
           )}
         </View>
       )}
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 
   const renderStep3 = () => (
-    <View style={{ flex: 1 }}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1 }}
+      keyboardVerticalOffset={80}
+    >
       <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scroll, { paddingBottom: 120 }]}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         <Text style={styles.stepHeading}>Add Players</Text>
         <Text style={styles.stepSub}>Search and invite participants to your event</Text>
@@ -609,74 +625,81 @@ export default function CreateEventScreen() {
           </View>
         )}
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 
   const renderStep4 = () => {
     const selectedFormat = EVENT_FORMATS.find((f) => f.id === format);
     const selectedEventType = EVENT_TYPES.find((t) => t.id === eventType);
     return (
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={80}
       >
-        <Text style={styles.stepHeading}>Review & Create</Text>
-        <Text style={styles.stepSub}>Confirm your event details before creating</Text>
+        <ScrollView
+          contentContainerStyle={[styles.scroll, { paddingBottom: 120 }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.stepHeading}>Review & Create</Text>
+          <Text style={styles.stepSub}>Confirm your event details before creating</Text>
 
-        {/* Summary card */}
-        <GlassCard glow="lime" style={styles.summaryCard}>
-          <Text style={styles.summaryEventName}>{name || 'Untitled Event'}</Text>
-          {description ? (
-            <Text style={styles.summaryDesc} numberOfLines={2}>{description}</Text>
-          ) : null}
+          {/* Summary card */}
+          <GlassCard glow="lime" style={styles.summaryCard}>
+            <Text style={styles.summaryEventName}>{name || 'Untitled Event'}</Text>
+            {description ? (
+              <Text style={styles.summaryDesc} numberOfLines={2}>{description}</Text>
+            ) : null}
 
-          <View style={styles.summaryDivider} />
+            <View style={styles.summaryDivider} />
 
-          <SummaryRow icon="calendar-outline"    label="Start Date"  value={startDate ? formatDateDisplay(startDate) : '—'} />
-          {endDate ? <SummaryRow icon="calendar-outline" label="End Date"    value={formatDateDisplay(endDate)} /> : null}
-          <SummaryRow icon="location-outline"    label="Course"      value={courseName || '—'} />
-          <SummaryRow icon="golf-outline"        label="Format"      value={selectedFormat?.label ?? format} />
-          <SummaryRow icon="trophy-outline"      label="Type"        value={selectedEventType ? `${selectedEventType.emoji} ${selectedEventType.label}` : eventType} />
-          <SummaryRow icon="repeat-outline"      label="Recurrence"  value={isRecurring ? (RECURRENCE_OPTIONS.find(r => r.id === recurrence)?.label ?? recurrence) : 'One-time'} />
-          {!isQuickGame && (
-            <SummaryRow icon="people-outline"    label="Players"     value={selectedPlayers.length > 0 ? `${selectedPlayers.length} invited` : 'None yet'} />
-          )}
-        </GlassCard>
-
-        {/* Player list preview */}
-        {!isQuickGame && selectedPlayers.length > 0 && (
-          <GlassCard style={{ marginBottom: 16 }}>
-            <Text style={styles.summarySubTitle}>Invited Players</Text>
-            {selectedPlayers.map(({ user, role }) => (
-              <View key={user.id} style={styles.summaryPlayerRow}>
-                <AvatarRing uri={user.avatar} name={user.name} size={32} ring="none" />
-                <Text style={styles.summaryPlayerName} numberOfLines={1}>{user.name}</Text>
-                <View style={[styles.roleChip, role === 'SCOREKEEPER' && styles.roleChipActive]}>
-                  <Text style={[styles.roleChipText, role === 'SCOREKEEPER' && styles.roleChipTextActive]}>
-                    {role}
-                  </Text>
-                </View>
-              </View>
-            ))}
+            <SummaryRow icon="calendar-outline"    label="Start Date"  value={startDate ? formatDateDisplay(startDate) : '—'} />
+            {endDate ? <SummaryRow icon="calendar-outline" label="End Date"    value={formatDateDisplay(endDate)} /> : null}
+            <SummaryRow icon="location-outline"    label="Course"      value={courseName || '—'} />
+            <SummaryRow icon="golf-outline"        label="Format"      value={selectedFormat?.label ?? format} />
+            <SummaryRow icon="trophy-outline"      label="Type"        value={selectedEventType ? `${selectedEventType.emoji} ${selectedEventType.label}` : eventType} />
+            <SummaryRow icon="repeat-outline"      label="Recurrence"  value={isRecurring ? (RECURRENCE_OPTIONS.find(r => r.id === recurrence)?.label ?? recurrence) : 'One-time'} />
+            {!isQuickGame && (
+              <SummaryRow icon="people-outline"    label="Players"     value={selectedPlayers.length > 0 ? `${selectedPlayers.length} invited` : 'None yet'} />
+            )}
           </GlassCard>
-        )}
 
-        {/* Warning if no name */}
-        {!name.trim() && (
-          <View style={styles.warningBox}>
-            <Ionicons name="warning-outline" size={16} color={Colors.warning} />
-            <Text style={styles.warningText}>Event name is required to create.</Text>
-          </View>
-        )}
+          {/* Player list preview */}
+          {!isQuickGame && selectedPlayers.length > 0 && (
+            <GlassCard style={{ marginBottom: 16 }}>
+              <Text style={styles.summarySubTitle}>Invited Players</Text>
+              {selectedPlayers.map(({ user, role }) => (
+                <View key={user.id} style={styles.summaryPlayerRow}>
+                  <AvatarRing uri={user.avatar} name={user.name} size={32} ring="none" />
+                  <Text style={styles.summaryPlayerName} numberOfLines={1}>{user.name}</Text>
+                  <View style={[styles.roleChip, role === 'SCOREKEEPER' && styles.roleChipActive]}>
+                    <Text style={[styles.roleChipText, role === 'SCOREKEEPER' && styles.roleChipTextActive]}>
+                      {role}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </GlassCard>
+          )}
 
-        <GradientButton
-          label="Create Event"
-          onPress={handleCreate}
-          loading={creating}
-          disabled={!name.trim() || creating}
-          style={{ marginTop: 8 }}
-        />
-      </ScrollView>
+          {/* Warning if no name */}
+          {!name.trim() && (
+            <View style={styles.warningBox}>
+              <Ionicons name="warning-outline" size={16} color={Colors.warning} />
+              <Text style={styles.warningText}>Event name is required to create.</Text>
+            </View>
+          )}
+
+          <GradientButton
+            label="Create Event"
+            onPress={handleCreate}
+            loading={creating}
+            disabled={!name.trim() || creating}
+            style={{ marginTop: 8 }}
+          />
+        </ScrollView>
+      </KeyboardAvoidingView>
     );
   };
 
