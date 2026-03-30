@@ -24,6 +24,9 @@ dotenv.config();
 const app        = express();
 const httpServer = http.createServer(app);
 
+// Trust Railway's reverse proxy so express-rate-limit can read the real client IP
+app.set('trust proxy', 1);
+
 // ─── Socket.io ───────────────────────────────────────────────────────────────
 
 export const io = new SocketServer(httpServer, {
