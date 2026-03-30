@@ -673,15 +673,6 @@ export default function SocialScreen() {
         }}
       />
 
-      {/* FAB */}
-      <TouchableOpacity
-        style={[styles.fab, { bottom: insets.bottom + 90 }]}
-        onPress={() => setShowCompose(true)}
-        activeOpacity={0.85}
-      >
-        <Ionicons name="add" size={26} color={Colors.bg} />
-      </TouchableOpacity>
-
       {/* Compose modal */}
       <ComposeModal
         visible={showCompose}
@@ -734,13 +725,4 @@ const styles = StyleSheet.create({
   },
 
   loadMoreRow: { paddingVertical: 20, alignItems: 'center' },
-
-  fab: {
-    position: 'absolute', right: Spacing.md,
-    width: 52, height: 52, borderRadius: 26,
-    backgroundColor: Colors.lime, alignItems: 'center', justifyContent: 'center',
-    shadowColor: Colors.lime, shadowOpacity: 0.4,
-    shadowRadius: 12, shadowOffset: { width: 0, height: 0 },
-    elevation: 8,
-  },
 });

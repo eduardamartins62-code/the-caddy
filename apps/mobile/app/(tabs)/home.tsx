@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Bell, Settings, MapPin, Calendar, ArrowRight, Flag, Map, Trophy, UserPlus, MessageCircle } from 'lucide-react-native';
+import { Bell, Settings, MapPin, Calendar, ArrowRight, MessageCircle } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
@@ -109,28 +109,6 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* Start a Game CTA */}
-        <TouchableOpacity
-          style={styles.startGameCard}
-          activeOpacity={0.82}
-          onPress={() => router.push('/event/create?quickGame=true' as any)}
-        >
-          <LinearGradient
-            colors={['#C9F31D', '#7B61FF']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.startGameGrad}
-          >
-            <View style={styles.startGameLeft}>
-              <Text style={styles.startGameTitle}>Start a Game</Text>
-              <Text style={styles.startGameSub}>Quick casual round — no fuss</Text>
-            </View>
-            <View style={styles.startGameIcon}>
-              <Text style={{ fontSize: 28 }}>⛳</Text>
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
 
         {/* Hero Event Card */}
         {loading ? (
@@ -247,32 +225,6 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Quick Access */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Access</Text>
-          <View style={styles.quickGrid}>
-            {([
-              { Icon: Flag,     label: 'Schedule', route: '/(tabs)/schedule' as const, color: Colors.lime },
-              { Icon: Map,      label: 'Itinerary', route: '/itinerary' as const, color: Colors.purple },
-              { Icon: Trophy,   label: 'History', route: '/history' as const, color: Colors.orange },
-              { Icon: UserPlus, label: 'Invite', route: (activeEvent ? `/event/${activeEvent.id}` : '/home') as any, color: Colors.success },
-            ] as { Icon: any; label: string; route: any; color: string }[]).map(item => (
-              <TouchableOpacity
-                key={item.label}
-                activeOpacity={0.75}
-                onPress={() => router.push(item.route)}
-                style={styles.quickItem}
-              >
-                <GlassCard padding={16} style={styles.quickCard}>
-                  <View style={[styles.quickIcon, { backgroundColor: item.color + '20' }]}>
-                    <item.Icon size={22} color={item.color} strokeWidth={2} />
-                  </View>
-                  <Text style={styles.quickLabel}>{item.label}</Text>
-                </GlassCard>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
       </ScrollView>
     </View>
   );
@@ -298,14 +250,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3, borderWidth: 1.5, borderColor: Colors.bg,
   },
   badgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
-
-  // Start a Game
-  startGameCard:  { marginBottom: 16, borderRadius: Radius.lg, overflow: 'hidden' },
-  startGameGrad:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 18 },
-  startGameLeft:  { gap: 3 },
-  startGameTitle: { color: Colors.bg, fontSize: 18, fontWeight: '900', letterSpacing: -0.3 },
-  startGameSub:   { color: Colors.bg, fontSize: 12, opacity: 0.7 },
-  startGameIcon:  { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(0,0,0,0.15)', alignItems: 'center', justifyContent: 'center' },
 
   // Hero
   heroWrap:   { marginBottom: 24 },
@@ -361,10 +305,4 @@ const styles = StyleSheet.create({
   podiumName:      { color: Colors.textPrimary, fontSize: 12, fontWeight: '600', textAlign: 'center' },
   podiumScore:     { fontSize: 18, fontWeight: '800', letterSpacing: -0.5 },
 
-  // Quick grid
-  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  quickItem: { width: '47.5%' },
-  quickCard: { alignItems: 'center', gap: 10 },
-  quickIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  quickLabel: { color: Colors.textPrimary, fontSize: 13, fontWeight: '600' },
 });

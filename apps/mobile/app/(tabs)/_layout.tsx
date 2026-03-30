@@ -1,10 +1,11 @@
 import React from 'react';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  House, Compass, Plus, Trophy, User, Ellipsis,
+  House, Compass, Trophy, User,
 } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/theme';
 
 // ─── Tab config ──────────────────────────────────────────────────────────────
@@ -17,12 +18,11 @@ type TabConfig = {
 };
 
 const TABS: TabConfig[] = [
-  { name: 'home',        label: 'Home',        Icon: House },
-  { name: 'social',      label: 'Explore',     Icon: Compass },
-  { name: 'create',      label: '',            Icon: Plus, isCreate: true },
-  { name: 'leaderboard', label: 'Leaderboard', Icon: Trophy },
-  { name: 'profile',     label: 'Profile',     Icon: User },
-  { name: 'more',        label: 'More',        Icon: Ellipsis },
+  { name: 'home',        label: 'Home',    Icon: House },
+  { name: 'social',      label: 'Explore', Icon: Compass },
+  { name: 'create',      label: '',        Icon: House, isCreate: true },
+  { name: 'leaderboard', label: 'Leader',  Icon: Trophy },
+  { name: 'profile',     label: 'Profile', Icon: User },
 ];
 
 // ─── Bar height constant ──────────────────────────────────────────────────────
@@ -34,6 +34,7 @@ const CREATE_SIZE = 54;
 
 function CustomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const bottomPad = Math.max(insets.bottom, 8);
 
   return (
@@ -61,17 +62,17 @@ function CustomTabBar({ state, navigation }: any) {
             }
           };
 
-          // ── Create button (center) ──────────────────────────────────────────
+          // ── Create / Start Game button (center) ────────────────────────────
           if (tab.isCreate) {
             return (
               <TouchableOpacity
                 key={tab.name}
-                onPress={onPress}
+                onPress={() => router.push('/event/create' as any)}
                 activeOpacity={0.8}
                 style={styles.createWrap}
               >
                 <View style={styles.createCircle}>
-                  <Plus size={24} color={Colors.bg} strokeWidth={2.8} />
+                  <Ionicons name="golf-outline" size={26} color={Colors.bg} />
                 </View>
               </TouchableOpacity>
             );
@@ -126,8 +127,8 @@ export default function TabsLayout() {
       <Tabs.Screen name="create" />
       <Tabs.Screen name="leaderboard" />
       <Tabs.Screen name="profile" />
-      <Tabs.Screen name="more" />
       {/* Hidden legacy screens — still routable, not shown in nav */}
+      <Tabs.Screen name="more"      options={{ href: null }} />
       <Tabs.Screen name="schedule"  options={{ href: null }} />
       <Tabs.Screen name="itinerary" options={{ href: null }} />
       <Tabs.Screen name="history"   options={{ href: null }} />

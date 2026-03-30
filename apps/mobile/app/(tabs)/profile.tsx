@@ -7,9 +7,10 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  Shield, LogOut, LayoutGrid, TrendingUp, List,
+  Shield, LayoutGrid, TrendingUp, List,
   Flag, MapPin, Bell, Zap, Star, Trophy, Map, AlertCircle, Camera,
 } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
@@ -31,7 +32,7 @@ const CELL = (Dimensions.get('window').width - 4) / 3;
 export default function ProfileTab() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user: authUser, signOut, refreshUser, updateUser } = useAuth();
+  const { user: authUser, refreshUser, updateUser } = useAuth();
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<ProfileTab>('posts');
   const [refreshing, setRefreshing] = useState(false);
@@ -153,8 +154,8 @@ export default function ProfileTab() {
               <Shield size={19} color={Colors.lime} strokeWidth={2} />
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.iconBtn} onPress={signOut}>
-            <LogOut size={19} color={Colors.textSecondary} strokeWidth={2} />
+          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/settings' as any)}>
+            <Ionicons name="settings-outline" size={19} color={Colors.textSecondary} />
           </TouchableOpacity>
         </View>
       </View>
