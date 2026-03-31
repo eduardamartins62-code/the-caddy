@@ -6,7 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
 import {
   Image as ImageIcon, Flag, MapPin, CircleX, Camera, FileText, Trophy,
@@ -39,10 +39,10 @@ export default function CreateScreen() {
   }
 
   async function handlePost() {
-    if (!content.trim()) return;
+    if (!content.trim() || submitting) return;
     setSubmitting(true);
     try {
-      const token = await AsyncStorage.getItem('auth_token');
+      const token = await SecureStore.getItemAsync('auth_token');
       const formData = new FormData();
       formData.append('content', content.trim());
       if (courseTag) formData.append('courseTag', courseTag);
@@ -78,7 +78,7 @@ export default function CreateScreen() {
           label="Share"
           onPress={handlePost}
           loading={submitting}
-          disabled={!content.trim()}
+          disabled={!content.trim() || submitting}
           size="sm"
         />
       </View>
