@@ -75,6 +75,8 @@ export const usersApi = {
   calculateHandicap: () => request<any>('/users/me/handicap/calculate', { method: 'POST' }),
   follow: (id: string) => request(`/users/${id}/follow`, { method: 'POST' }),
   unfollow: (id: string) => request(`/users/${id}/follow`, { method: 'DELETE' }),
+  getFriends: () => request<any[]>('/users/friends'),
+  getFollowRequests: () => request<any[]>('/users/follow-requests'),
   uploadAvatar: async (uri: string): Promise<{ avatar: string }> => {
     const token = await getToken();
     const formData = new FormData();
@@ -120,6 +122,14 @@ export const eventsApi = {
     request(`/events/${id}/participants`, { method: 'POST', body: JSON.stringify({ userId, role }) }),
   removeParticipant: (id: string, userId: string) =>
     request(`/events/${id}/participants/${userId}`, { method: 'DELETE' }),
+  addItineraryItem: (id: string, data: unknown) =>
+    request(`/events/${id}/itinerary`, { method: 'POST', body: JSON.stringify(data) }),
+  updateItineraryItem: (id: string, itemId: string, data: unknown) =>
+    request(`/events/${id}/itinerary/${itemId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteItineraryItem: (id: string, itemId: string) =>
+    request(`/events/${id}/itinerary/${itemId}`, { method: 'DELETE' }),
+  addHistory: (id: string, data: unknown) =>
+    request(`/events/${id}/history`, { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // ─── Rounds ──────────────────────────────────────────────────────────────────
@@ -130,6 +140,7 @@ export const roundsApi = {
   create: (data: unknown) => request('/rounds', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: any) =>
     request(`/rounds/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  getActive: () => request<any>('/rounds/active'),
 };
 
 // ─── Scores ──────────────────────────────────────────────────────────────────
@@ -181,6 +192,8 @@ export const coursesApi = {
   search: (q: string) => request<any[]>(`/courses/search?q=${encodeURIComponent(q)}`),
   getById: (id: string) => request<any>(`/courses/${id}`),
   create: (data: unknown) => request<any>('/courses', { method: 'POST', body: JSON.stringify(data) }),
+  getHome: () => request<any>('/courses/home'),
+  setHome: (courseId: string) => request<any>('/courses/home', { method: 'POST', body: JSON.stringify({ courseId }) }),
 };
 
 // ─── Notifications ────────────────────────────────────────────────────────────

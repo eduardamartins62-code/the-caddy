@@ -203,6 +203,57 @@ router.get('/search', authenticate, async (req: AuthRequest, res: Response) => {
   res.json({ data: users });
 });
 
+// GET /api/users/friends — mutual follows (friends)
+router.get('/friends', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const following = await prisma.follow.findMany({
+      where:  { followerId: req.user!.id },
+      select: { followingId: true },
+    });
+    const followingIds = following.map(f => f.followingId);
+
+    // Friends = people I follow who also follow me back
+    const friends = await prisma.follow.findMany({
+      where: { followerId: { in: followingIds }, followingId: req.user!.id },
+      include: {
+        follower: {
+          select: { id: true, name: true, username: true, avatar: true, handicapIndex: true },
+        },
+      },
+    });
+
+    res.json({ data: friends.map(f => f.follower) });
+  } catch (err) {
+    console.error('GET /users/friends error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/users/follow-requests — people who follow me but I don't follow back
+router.get('/follow-requests', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const myFollowing = await prisma.follow.findMany({
+      where:  { followerId: req.user!.id },
+      select: { followingId: true },
+    });
+    const myFollowingIds = myFollowing.map(f => f.followingId);
+
+    const pendingFollowers = await prisma.follow.findMany({
+      where: { followingId: req.user!.id, followerId: { notIn: myFollowingIds } },
+      include: {
+        follower: {
+          select: { id: true, name: true, username: true, avatar: true, handicapIndex: true },
+        },
+      },
+    });
+
+    res.json({ data: pendingFollowers.map(f => f.follower) });
+  } catch (err) {
+    console.error('GET /users/follow-requests error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/users/suggestions — users in same events but not yet followed
 router.get('/suggestions', authenticate, async (req: AuthRequest, res: Response) => {
   const userId = req.user!.id;

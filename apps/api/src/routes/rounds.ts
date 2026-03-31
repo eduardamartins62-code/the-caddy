@@ -31,6 +31,41 @@ router.post('/', authenticate, requireScorekeeper, async (req: AuthRequest, res:
   res.status(201).json({ data: round });
 });
 
+// GET /api/rounds/active — get the user's currently active (in-progress) round
+router.get('/active', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const round = await prisma.round.findFirst({
+      where: {
+        isComplete: false,
+        event: {
+          participants: { some: { userId: req.user!.id, status: 'ACCEPTED' } },
+        },
+      },
+      include: {
+        event:  { select: { id: true, name: true } },
+        scores: { where: { userId: req.user!.id } },
+        holes:  true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!round) { res.json({ data: null }); return; }
+
+    const userScores  = round.scores;
+    const holesPlayed = userScores.length;
+    const gross       = userScores.reduce((sum, s) => sum + s.strokes, 0);
+    const parThru     = round.holes
+      .filter(h => userScores.some(s => s.holeNumber === h.holeNumber))
+      .reduce((sum, h) => sum + h.par, 0);
+    const toPar = gross - parThru;
+
+    res.json({ data: { round, holesPlayed, gross, toPar } });
+  } catch (err) {
+    console.error('GET /rounds/active error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/rounds/:id
 router.get('/:id', async (req, res: Response) => {
   const round = await prisma.round.findUnique({

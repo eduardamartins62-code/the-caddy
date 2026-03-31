@@ -28,6 +28,7 @@ model User {
   bio                String?
   handicap           Float?
   homeCourse         String?
+  homeCourseId       String?
   location           String?
   role               String   @default("USER")
   onboardingComplete Boolean  @default(true)
@@ -49,6 +50,7 @@ model User {
   scores           Score[]
   posts            SocialPost[]
   comments         Comment[]
+  postLikes        PostLike[]
   createdEvents    Event[]
   notifications    Notification[]     @relation("NotificationRecipient")
   sentInvites      EventInvite[]      @relation("InviteSender")
@@ -56,6 +58,7 @@ model User {
   sentMessages     Message[]          @relation("MessageSender")
   receivedMessages Message[]          @relation("MessageReceiver")
   handicapRecords  HandicapRecord[]
+  homeCourseRel    GolfCourse?        @relation("HomeCourse", fields: [homeCourseId], references: [id])
 }
 
 model Follow {
@@ -153,7 +156,8 @@ model GolfCourse {
   courseSlope  Int?
   cachedAt     DateTime?
 
-  rounds Round[]
+  rounds    Round[]
+  homeUsers User[]  @relation("HomeCourse")
 }
 
 model Round {
@@ -255,11 +259,13 @@ model SocialPost {
 }
 
 model PostLike {
-  id     String @id @default(cuid())
-  postId String
-  userId String
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
 
   post SocialPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([postId, userId])
 }

@@ -1,12 +1,78 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  House, Compass, Trophy, User,
+  House, Compass, Trophy, User, Flag,
 } from 'lucide-react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/theme';
+import { roundsApi } from '../../services/api';
+
+// ─── Active Round Bar ─────────────────────────────────────────────────────────
+
+function ActiveRoundBar() {
+  const [activeRound, setActiveRound] = useState<any>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const data = await roundsApi.getActive();
+        setActiveRound(data);
+      } catch { setActiveRound(null); }
+    };
+    check();
+    const interval = setInterval(check, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (!activeRound) return null;
+
+  return (
+    <TouchableOpacity
+      style={activeRoundBarStyles.container}
+      onPress={() => router.push(`/round/${activeRound.round.id}` as any)}
+      activeOpacity={0.9}
+    >
+      <View style={activeRoundBarStyles.info}>
+        <Text style={activeRoundBarStyles.label}>Thru {activeRound.holesPlayed}</Text>
+        <Text style={activeRoundBarStyles.label}>
+          To Par {activeRound.toPar >= 0 ? '+' : ''}{activeRound.toPar}
+        </Text>
+        <Text style={activeRoundBarStyles.label}>Gross {activeRound.gross}</Text>
+      </View>
+      <TouchableOpacity
+        style={activeRoundBarStyles.finishBtn}
+        onPress={() => router.push(`/round/${activeRound.round.id}` as any)}
+      >
+        <Text style={activeRoundBarStyles.finishText}>Finish Round</Text>
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+}
+
+const activeRoundBarStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#1A1A2E',
+    borderTopWidth: 1,
+    borderTopColor: '#C9F31D33',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  info: { flexDirection: 'row', gap: 20 },
+  label: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
+  finishBtn: {
+    backgroundColor: '#C9F31D',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  finishText: { color: '#0A0A0F', fontSize: 13, fontWeight: '700' },
+});
 
 // ─── Tab config ──────────────────────────────────────────────────────────────
 
@@ -21,6 +87,7 @@ const TABS: TabConfig[] = [
   { name: 'home',        label: 'Home',    Icon: House },
   { name: 'social',      label: 'Explore', Icon: Compass },
   { name: 'create',      label: '',        Icon: House, isCreate: true },
+  { name: 'courses',     label: 'Courses', Icon: Flag },
   { name: 'leaderboard', label: 'Leader',  Icon: Trophy },
   { name: 'profile',     label: 'Profile', Icon: User },
 ];
@@ -118,21 +185,25 @@ function CustomTabBar({ state, navigation }: any) {
 
 export default function TabsLayout() {
   return (
-    <Tabs
-      tabBar={(props) => <CustomTabBar {...props} />}
-      screenOptions={{ headerShown: false }}
-    >
-      <Tabs.Screen name="home" />
-      <Tabs.Screen name="social" />
-      <Tabs.Screen name="create" />
-      <Tabs.Screen name="leaderboard" />
-      <Tabs.Screen name="profile" />
-      {/* Hidden legacy screens — still routable, not shown in nav */}
-      <Tabs.Screen name="more"      options={{ href: null }} />
-      <Tabs.Screen name="schedule"  options={{ href: null }} />
-      <Tabs.Screen name="itinerary" options={{ href: null }} />
-      <Tabs.Screen name="history"   options={{ href: null }} />
-    </Tabs>
+    <View style={{ flex: 1 }}>
+      <Tabs
+        tabBar={(props) => <CustomTabBar {...props} />}
+        screenOptions={{ headerShown: false }}
+      >
+        <Tabs.Screen name="home" />
+        <Tabs.Screen name="social" />
+        <Tabs.Screen name="create" />
+        <Tabs.Screen name="courses" />
+        <Tabs.Screen name="leaderboard" />
+        <Tabs.Screen name="profile" />
+        {/* Hidden legacy screens — still routable, not shown in nav */}
+        <Tabs.Screen name="more"      options={{ href: null }} />
+        <Tabs.Screen name="schedule"  options={{ href: null }} />
+        <Tabs.Screen name="itinerary" options={{ href: null }} />
+        <Tabs.Screen name="history"   options={{ href: null }} />
+      </Tabs>
+      <ActiveRoundBar />
+    </View>
   );
 }
 

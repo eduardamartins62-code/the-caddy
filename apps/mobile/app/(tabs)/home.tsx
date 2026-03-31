@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Bell, Settings, MapPin, Calendar, ArrowRight, MessageCircle } from 'lucide-react-native';
+import { Bell, Settings, MapPin, Calendar, ArrowRight, MessageCircle, Users, Trophy, BarChart2, Flag } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
@@ -15,6 +15,64 @@ import { SkeletonCard } from '../../components/ui/SkeletonLoader';
 import AvatarRing from '../../components/ui/AvatarRing';
 import GlassCard from '../../components/ui/GlassCard';
 import { Colors, Radius, Spacing } from '../../constants/theme';
+
+// ─── Quick Actions ────────────────────────────────────────────────────────────
+
+const QUICK_ACTIONS = [
+  { label: 'Friends',     Icon: Users,    route: '/friends',            color: '#4A90D9' },
+  { label: 'Tournaments', Icon: Trophy,   route: '/event/create',       color: '#C9F31D' },
+  { label: 'Leaderboard', Icon: BarChart2, route: '/(tabs)/leaderboard', color: '#E8365D' },
+  { label: 'Courses',     Icon: Flag,     route: '/(tabs)/courses',     color: '#7B61FF' },
+] as const;
+
+function QuickActionsRow() {
+  const router = useRouter();
+  return (
+    <View style={qaStyles.row}>
+      {QUICK_ACTIONS.map(({ label, Icon, route, color }) => (
+        <TouchableOpacity
+          key={label}
+          style={qaStyles.item}
+          onPress={() => router.push(route as any)}
+          activeOpacity={0.75}
+        >
+          <View style={[qaStyles.iconBox, { backgroundColor: color + '22' }]}>
+            <Icon size={22} color={color} strokeWidth={1.8} />
+          </View>
+          <Text style={qaStyles.label}>{label}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
+const qaStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  item: {
+    width: 75,
+    alignItems: 'center',
+    gap: 7,
+  },
+  iconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  label: {
+    color: Colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+});
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -109,6 +167,9 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Quick Actions */}
+        <QuickActionsRow />
 
         {/* Hero Event Card */}
         {loading ? (

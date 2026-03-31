@@ -1,13 +1,15 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   RefreshControl, Modal, ActivityIndicator, Alert,
+  TextInput, KeyboardAvoidingView, Platform, FlatList,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   useEvent,
   useEventLeaderboard,
@@ -15,7 +17,7 @@ import {
   useEventItinerary,
   useEventHistory,
 } from '../../hooks/useQueries';
-import { eventsApi, postsApi } from '../../services/api';
+import { eventsApi, postsApi, roundsApi, usersApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import AvatarRing from '../../components/ui/AvatarRing';
 import GlassCard from '../../components/ui/GlassCard';
@@ -118,6 +120,49 @@ export default function EventDetailScreen() {
   const [togglingStatus, setTogglingStatus] = useState(false);
   const tabScrollRef = useRef<ScrollView>(null);
 
+  // ─── Itinerary modal state ─────────────────────────────────────────────────
+  const [itinModalVisible, setItinModalVisible] = useState(false);
+  const [itinForm, setItinForm] = useState({
+    type: 'GOLF',
+    day: 1,
+    title: '',
+    description: '',
+    location: '',
+    time: '',
+  });
+  const [itinSubmitting, setItinSubmitting] = useState(false);
+
+  // ─── History modal state ───────────────────────────────────────────────────
+  const [histModalVisible, setHistModalVisible] = useState(false);
+  const [histForm, setHistForm] = useState({
+    year: new Date().getFullYear(),
+    champion: '',
+    winningScore: '',
+    coursePlayed: '',
+    recap: '',
+  });
+  const [histSubmitting, setHistSubmitting] = useState(false);
+
+  // ─── Round modal state ─────────────────────────────────────────────────────
+  const [roundModalVisible, setRoundModalVisible] = useState(false);
+  const [roundForm, setRoundForm] = useState({
+    courseName: '',
+    date: new Date(),
+    holes: 18 as 9 | 18,
+  });
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [roundSubmitting, setRoundSubmitting] = useState(false);
+
+  // ─── Players modal state ───────────────────────────────────────────────────
+  const [playersModalVisible, setPlayersModalVisible] = useState(false);
+  const [playerSearch, setPlayerSearch] = useState('');
+  const [playerResults, setPlayerResults] = useState<any[]>([]);
+  const [playerSearching, setPlayerSearching] = useState(false);
+  const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
+  const [selectedRole, setSelectedRole] = useState<'PLAYER' | 'SCOREKEEPER'>('PLAYER');
+  const [addingPlayer, setAddingPlayer] = useState(false);
+  const playerSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // React Query hooks
   const {
     data: event, isLoading: eventLoading, isError: eventError,
@@ -176,6 +221,10 @@ export default function EventDetailScreen() {
 
   // ─── Actions ───────────────────────────────────────────────────────────────
 
+  // isOrganizer: current user created this event
+  // Note: evaluated after early-returns so `event` is guaranteed non-null below
+  const isOrganizer = !!(event && user && (event as any).createdBy === user.id);
+
   async function respond(status: 'ACCEPTED' | 'DECLINED') {
     setResponding(true);
     try {
@@ -232,6 +281,169 @@ export default function EventDetailScreen() {
         )
       );
     } catch { /* silent */ }
+  }
+
+  // ─── Admin: Add Itinerary Item ──────────────────────────────────────────────
+
+  async function submitItineraryItem() {
+    if (!itinForm.title.trim()) {
+      Alert.alert('Error', 'Title is required');
+      return;
+    }
+    setItinSubmitting(true);
+    try {
+      await eventsApi.addItineraryItem(id, itinForm);
+      setItinModalVisible(false);
+      setItinForm({ type: 'GOLF', day: 1, title: '', description: '', location: '', time: '' });
+      await refetchItin();
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to add itinerary item');
+    } finally {
+      setItinSubmitting(false);
+    }
+  }
+
+  // ─── Admin: Add History Entry ──────────────────────────────────────────────
+
+  async function submitHistoryEntry() {
+    if (!histForm.champion.trim()) {
+      Alert.alert('Error', 'Champion name is required');
+      return;
+    }
+    setHistSubmitting(true);
+    try {
+      await eventsApi.addHistory(id, {
+        year: Number(histForm.year),
+        champion: histForm.champion,
+        winningScore: histForm.winningScore ? Number(histForm.winningScore) : undefined,
+        coursePlayed: histForm.coursePlayed || undefined,
+        recap: histForm.recap || undefined,
+      });
+      setHistModalVisible(false);
+      setHistForm({ year: new Date().getFullYear(), champion: '', winningScore: '', coursePlayed: '', recap: '' });
+      await refetchHistory();
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to add history entry');
+    } finally {
+      setHistSubmitting(false);
+    }
+  }
+
+  // ─── Admin: Add Round ──────────────────────────────────────────────────────
+
+  const STANDARD_PARS_18 = [4,4,3,4,5,3,4,4,4, 4,3,4,5,4,3,4,4,5];
+
+  async function submitRound() {
+    if (!roundForm.courseName.trim()) {
+      Alert.alert('Error', 'Course name is required');
+      return;
+    }
+    setRoundSubmitting(true);
+    try {
+      const parSource = roundForm.holes === 18 ? STANDARD_PARS_18 : STANDARD_PARS_18.slice(0, 9);
+      const holes = parSource.map((par, i) => ({ holeNumber: i + 1, par }));
+      await roundsApi.create({
+        eventId: id,
+        courseName: roundForm.courseName,
+        date: roundForm.date.toISOString(),
+        holes,
+      });
+      setRoundModalVisible(false);
+      setRoundForm({ courseName: '', date: new Date(), holes: 18 });
+      qc.invalidateQueries({ queryKey: ['event', id] });
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to create round');
+    } finally {
+      setRoundSubmitting(false);
+    }
+  }
+
+  // ─── Admin: Player Search ──────────────────────────────────────────────────
+
+  function handlePlayerSearchChange(text: string) {
+    setPlayerSearch(text);
+    if (playerSearchTimeout.current) clearTimeout(playerSearchTimeout.current);
+    if (text.length < 2) {
+      setPlayerResults([]);
+      return;
+    }
+    playerSearchTimeout.current = setTimeout(async () => {
+      setPlayerSearching(true);
+      try {
+        const results = await usersApi.list({ q: text });
+        setPlayerResults(results || []);
+      } catch {
+        setPlayerResults([]);
+      } finally {
+        setPlayerSearching(false);
+      }
+    }, 300);
+  }
+
+  async function addPlayerToEvent() {
+    if (!selectedPlayer) return;
+    setAddingPlayer(true);
+    try {
+      await eventsApi.addParticipant(id, selectedPlayer.id, selectedRole);
+      setPlayersModalVisible(false);
+      setPlayerSearch('');
+      setPlayerResults([]);
+      setSelectedPlayer(null);
+      setSelectedRole('PLAYER');
+      qc.invalidateQueries({ queryKey: ['participants', id] });
+      qc.invalidateQueries({ queryKey: ['event', id] });
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to add player');
+    } finally {
+      setAddingPlayer(false);
+    }
+  }
+
+  async function removeParticipant(userId: string, userName: string) {
+    Alert.alert(
+      'Remove Participant',
+      `Remove ${userName} from this event?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await eventsApi.removeParticipant(id, userId);
+              qc.invalidateQueries({ queryKey: ['participants', id] });
+              qc.invalidateQueries({ queryKey: ['event', id] });
+            } catch (e: any) {
+              Alert.alert('Error', e?.message || 'Failed to remove participant');
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  async function changeParticipantRole(userId: string, role: 'PLAYER' | 'SCOREKEEPER') {
+    try {
+      await eventsApi.addParticipant(id, userId, role);
+      qc.invalidateQueries({ queryKey: ['participants', id] });
+      qc.invalidateQueries({ queryKey: ['event', id] });
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to update role');
+    }
+  }
+
+  function showParticipantOptions(p: any) {
+    const actions: { text: string; onPress?: () => void; style?: 'cancel' | 'destructive' }[] = [
+      { text: 'Cancel', style: 'cancel' },
+    ];
+    if (p.role !== 'SCOREKEEPER') {
+      actions.push({ text: 'Make Scorekeeper', onPress: () => changeParticipantRole(p.userId, 'SCOREKEEPER') });
+    }
+    if (p.role !== 'PLAYER') {
+      actions.push({ text: 'Make Player', onPress: () => changeParticipantRole(p.userId, 'PLAYER') });
+    }
+    actions.push({ text: 'Remove', style: 'destructive', onPress: () => removeParticipant(p.userId, p.user?.name ?? 'this player') });
+    Alert.alert(p.user?.name ?? 'Participant', 'Manage participant', actions);
   }
 
   // ─── Loading / Error ────────────────────────────────────────────────────────
@@ -462,14 +674,25 @@ export default function EventDetailScreen() {
 
         {/* Participants */}
         <GlassCard style={[styles.section, { marginTop: 14 }]}>
-          <Text style={styles.sectionTitle}>
-            Participants ({(event.participants ?? participants).length ?? 0})
-          </Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>
+              Participants ({(event.participants ?? participants).length ?? 0})
+            </Text>
+            {isOrganizer && (
+              <TouchableOpacity
+                style={styles.sectionAddBtn}
+                onPress={() => setPlayersModalVisible(true)}
+              >
+                <Ionicons name="person-add-outline" size={16} color={Colors.lime} />
+              </TouchableOpacity>
+            )}
+          </View>
           {(event.participants ?? participants).map((p: any) => (
             <TouchableOpacity
               key={p.id}
               style={styles.participantRow}
               onPress={() => router.push(`/profile/${p.userId}` as any)}
+              onLongPress={isOrganizer ? () => showParticipantOptions(p) : undefined}
               activeOpacity={0.7}
             >
               <AvatarRing
@@ -480,14 +703,22 @@ export default function EventDetailScreen() {
               />
               <View style={styles.participantInfo}>
                 <Text style={styles.participantName}>{p.user?.name ?? 'Unknown'}</Text>
-                <Text style={styles.participantSub}>{p.role} · {p.status}</Text>
+                <Text style={styles.participantSub}>{p.status}</Text>
+              </View>
+              <View style={[styles.roleBadge, p.role === 'SCOREKEEPER' ? styles.roleBadgePurple : styles.roleBadgeLime]}>
+                <Text style={[styles.roleBadgeText, p.role === 'SCOREKEEPER' ? { color: Colors.purple } : { color: Colors.lime }]}>
+                  {p.role === 'SCOREKEEPER' ? 'KEEPER' : 'PLAYER'}
+                </Text>
               </View>
               {p.user?.handicap != null && (
                 <View style={styles.hdcpPill}>
                   <Text style={styles.hdcpText}>HCP {p.user.handicap}</Text>
                 </View>
               )}
-              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+              {isOrganizer
+                ? <Ionicons name="ellipsis-horizontal" size={16} color={Colors.textMuted} />
+                : <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+              }
             </TouchableOpacity>
           ))}
         </GlassCard>
@@ -638,6 +869,12 @@ export default function EventDetailScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.lime} />}
       >
+        {isOrganizer && (
+          <TouchableOpacity style={styles.adminHeaderBtn} onPress={() => setRoundModalVisible(true)}>
+            <Ionicons name="add" size={16} color={Colors.lime} />
+            <Text style={styles.adminHeaderBtnText}>Add Round</Text>
+          </TouchableOpacity>
+        )}
         {rounds.length === 0 && (
           <View style={styles.emptyState}>
             <Ionicons name="golf-outline" size={40} color={Colors.textMuted} />
@@ -720,10 +957,10 @@ export default function EventDetailScreen() {
               <Text style={[styles.dayPillText, itinDay === d && styles.dayPillTextActive]}>Day {d}</Text>
             </TouchableOpacity>
           ))}
-          {isAdmin && (
-            <TouchableOpacity style={styles.addItinBtn}>
+          {isOrganizer && (
+            <TouchableOpacity style={styles.addItinBtn} onPress={() => setItinModalVisible(true)}>
               <Ionicons name="add" size={16} color={Colors.lime} />
-              <Text style={styles.addItinText}>Add</Text>
+              <Text style={styles.addItinText}>Add Item</Text>
             </TouchableOpacity>
           )}
         </ScrollView>
@@ -814,6 +1051,12 @@ export default function EventDetailScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.lime} />}
       >
+        {isOrganizer && (
+          <TouchableOpacity style={styles.adminHeaderBtn} onPress={() => setHistModalVisible(true)}>
+            <Ionicons name="add" size={16} color={Colors.lime} />
+            <Text style={styles.adminHeaderBtnText}>Add Year</Text>
+          </TouchableOpacity>
+        )}
         {sorted.length === 0 && (
           <View style={styles.emptyState}>
             <Ionicons name="trophy-outline" size={40} color={Colors.textMuted} />
@@ -949,6 +1192,342 @@ export default function EventDetailScreen() {
       <Hero />
       <TabBar />
       <View style={{ flex: 1 }}>{renderTab()}</View>
+
+      {/* ── Admin: Add Itinerary Modal ──────────────────────────────────── */}
+      <Modal visible={itinModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setItinModalVisible(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={[modalStyles.sheet, { paddingTop: insets.top + 16 }]}>
+            <View style={modalStyles.header}>
+              <TouchableOpacity onPress={() => setItinModalVisible(false)}>
+                <Text style={modalStyles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={modalStyles.title}>Add Itinerary Item</Text>
+              <TouchableOpacity
+                style={[modalStyles.submitBtn, itinSubmitting && { opacity: 0.5 }]}
+                onPress={submitItineraryItem}
+                disabled={itinSubmitting}
+              >
+                {itinSubmitting
+                  ? <ActivityIndicator size="small" color={Colors.bg} />
+                  : <Text style={modalStyles.submitText}>Add</Text>
+                }
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={modalStyles.body}>
+              {/* Type chips */}
+              <Text style={modalStyles.fieldLabel}>Type</Text>
+              <View style={modalStyles.chipRow}>
+                {(['GOLF', 'DINING', 'HOTEL', 'TRANSPORT', 'NIGHTLIFE'] as const).map(t => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[modalStyles.chip, itinForm.type === t && modalStyles.chipActive]}
+                    onPress={() => setItinForm(f => ({ ...f, type: t }))}
+                  >
+                    <Text style={[modalStyles.chipText, itinForm.type === t && modalStyles.chipTextActive]}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Day stepper */}
+              <Text style={modalStyles.fieldLabel}>Day</Text>
+              <View style={modalStyles.stepperRow}>
+                <TouchableOpacity
+                  style={modalStyles.stepperBtn}
+                  onPress={() => setItinForm(f => ({ ...f, day: Math.max(1, f.day - 1) }))}
+                >
+                  <Ionicons name="remove" size={18} color={Colors.textPrimary} />
+                </TouchableOpacity>
+                <Text style={modalStyles.stepperValue}>{itinForm.day}</Text>
+                <TouchableOpacity
+                  style={modalStyles.stepperBtn}
+                  onPress={() => setItinForm(f => ({ ...f, day: Math.min(7, f.day + 1) }))}
+                >
+                  <Ionicons name="add" size={18} color={Colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={modalStyles.fieldLabel}>Title *</Text>
+              <TextInput
+                style={modalStyles.input}
+                placeholder="e.g. Tee time at Augusta"
+                placeholderTextColor={Colors.textMuted}
+                value={itinForm.title}
+                onChangeText={v => setItinForm(f => ({ ...f, title: v }))}
+              />
+
+              <Text style={modalStyles.fieldLabel}>Time</Text>
+              <TextInput
+                style={modalStyles.input}
+                placeholder="e.g. 7:30 AM"
+                placeholderTextColor={Colors.textMuted}
+                value={itinForm.time}
+                onChangeText={v => setItinForm(f => ({ ...f, time: v }))}
+              />
+
+              <Text style={modalStyles.fieldLabel}>Location</Text>
+              <TextInput
+                style={modalStyles.input}
+                placeholder="Venue or address"
+                placeholderTextColor={Colors.textMuted}
+                value={itinForm.location}
+                onChangeText={v => setItinForm(f => ({ ...f, location: v }))}
+              />
+
+              <Text style={modalStyles.fieldLabel}>Description</Text>
+              <TextInput
+                style={[modalStyles.input, modalStyles.textArea]}
+                placeholder="Additional details..."
+                placeholderTextColor={Colors.textMuted}
+                value={itinForm.description}
+                onChangeText={v => setItinForm(f => ({ ...f, description: v }))}
+                multiline
+                numberOfLines={4}
+              />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ── Admin: Add History Modal ────────────────────────────────────── */}
+      <Modal visible={histModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setHistModalVisible(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={[modalStyles.sheet, { paddingTop: insets.top + 16 }]}>
+            <View style={modalStyles.header}>
+              <TouchableOpacity onPress={() => setHistModalVisible(false)}>
+                <Text style={modalStyles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={modalStyles.title}>Add Year</Text>
+              <TouchableOpacity
+                style={[modalStyles.submitBtn, histSubmitting && { opacity: 0.5 }]}
+                onPress={submitHistoryEntry}
+                disabled={histSubmitting}
+              >
+                {histSubmitting
+                  ? <ActivityIndicator size="small" color={Colors.bg} />
+                  : <Text style={modalStyles.submitText}>Add</Text>
+                }
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={modalStyles.body}>
+              <Text style={modalStyles.fieldLabel}>Year</Text>
+              <TextInput
+                style={modalStyles.input}
+                placeholder={String(new Date().getFullYear())}
+                placeholderTextColor={Colors.textMuted}
+                value={String(histForm.year)}
+                onChangeText={v => setHistForm(f => ({ ...f, year: parseInt(v, 10) || new Date().getFullYear() }))}
+                keyboardType="number-pad"
+                maxLength={4}
+              />
+
+              <Text style={modalStyles.fieldLabel}>Champion *</Text>
+              <TextInput
+                style={modalStyles.input}
+                placeholder="Winner's name"
+                placeholderTextColor={Colors.textMuted}
+                value={histForm.champion}
+                onChangeText={v => setHistForm(f => ({ ...f, champion: v }))}
+              />
+
+              <Text style={modalStyles.fieldLabel}>Winning Score</Text>
+              <TextInput
+                style={modalStyles.input}
+                placeholder="e.g. -14"
+                placeholderTextColor={Colors.textMuted}
+                value={histForm.winningScore}
+                onChangeText={v => setHistForm(f => ({ ...f, winningScore: v }))}
+                keyboardType="numbers-and-punctuation"
+              />
+
+              <Text style={modalStyles.fieldLabel}>Course Played</Text>
+              <TextInput
+                style={modalStyles.input}
+                placeholder="Course name"
+                placeholderTextColor={Colors.textMuted}
+                value={histForm.coursePlayed}
+                onChangeText={v => setHistForm(f => ({ ...f, coursePlayed: v }))}
+              />
+
+              <Text style={modalStyles.fieldLabel}>Recap</Text>
+              <TextInput
+                style={[modalStyles.input, modalStyles.textArea]}
+                placeholder="Event recap or highlights..."
+                placeholderTextColor={Colors.textMuted}
+                value={histForm.recap}
+                onChangeText={v => setHistForm(f => ({ ...f, recap: v }))}
+                multiline
+                numberOfLines={5}
+              />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ── Admin: Add Round Modal ──────────────────────────────────────── */}
+      <Modal visible={roundModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setRoundModalVisible(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={[modalStyles.sheet, { paddingTop: insets.top + 16 }]}>
+            <View style={modalStyles.header}>
+              <TouchableOpacity onPress={() => setRoundModalVisible(false)}>
+                <Text style={modalStyles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={modalStyles.title}>Add Round</Text>
+              <TouchableOpacity
+                style={[modalStyles.submitBtn, roundSubmitting && { opacity: 0.5 }]}
+                onPress={submitRound}
+                disabled={roundSubmitting}
+              >
+                {roundSubmitting
+                  ? <ActivityIndicator size="small" color={Colors.bg} />
+                  : <Text style={modalStyles.submitText}>Add</Text>
+                }
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={modalStyles.body}>
+              <Text style={modalStyles.fieldLabel}>Course Name *</Text>
+              <TextInput
+                style={modalStyles.input}
+                placeholder="e.g. Augusta National"
+                placeholderTextColor={Colors.textMuted}
+                value={roundForm.courseName}
+                onChangeText={v => setRoundForm(f => ({ ...f, courseName: v }))}
+              />
+
+              <Text style={modalStyles.fieldLabel}>Date</Text>
+              <TouchableOpacity
+                style={modalStyles.dateBtn}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Ionicons name="calendar-outline" size={16} color={Colors.lime} />
+                <Text style={modalStyles.dateBtnText}>
+                  {roundForm.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </Text>
+              </TouchableOpacity>
+              {showDatePicker && (
+                <DateTimePicker
+                  value={roundForm.date}
+                  mode="date"
+                  display="default"
+                  onChange={(_, d) => {
+                    setShowDatePicker(false);
+                    if (d) setRoundForm(f => ({ ...f, date: d }));
+                  }}
+                />
+              )}
+
+              <Text style={modalStyles.fieldLabel}>Holes</Text>
+              <View style={modalStyles.chipRow}>
+                {([9, 18] as const).map(h => (
+                  <TouchableOpacity
+                    key={h}
+                    style={[modalStyles.chip, roundForm.holes === h && modalStyles.chipActive]}
+                    onPress={() => setRoundForm(f => ({ ...f, holes: h }))}
+                  >
+                    <Text style={[modalStyles.chipText, roundForm.holes === h && modalStyles.chipTextActive]}>{h} Holes</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ── Admin: Add Player Modal ─────────────────────────────────────── */}
+      <Modal visible={playersModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setPlayersModalVisible(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={[modalStyles.sheet, { paddingTop: insets.top + 16 }]}>
+            <View style={modalStyles.header}>
+              <TouchableOpacity onPress={() => setPlayersModalVisible(false)}>
+                <Text style={modalStyles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={modalStyles.title}>Add Player</Text>
+              <TouchableOpacity
+                style={[modalStyles.submitBtn, (!selectedPlayer || addingPlayer) && { opacity: 0.4 }]}
+                onPress={addPlayerToEvent}
+                disabled={!selectedPlayer || addingPlayer}
+              >
+                {addingPlayer
+                  ? <ActivityIndicator size="small" color={Colors.bg} />
+                  : <Text style={modalStyles.submitText}>Add</Text>
+                }
+              </TouchableOpacity>
+            </View>
+
+            <View style={modalStyles.body}>
+              {/* Search input */}
+              <View style={modalStyles.searchRow}>
+                <Ionicons name="search-outline" size={16} color={Colors.textMuted} />
+                <TextInput
+                  style={modalStyles.searchInput}
+                  placeholder="Search by name or username..."
+                  placeholderTextColor={Colors.textMuted}
+                  value={playerSearch}
+                  onChangeText={handlePlayerSearchChange}
+                  autoFocus
+                />
+                {playerSearching && <ActivityIndicator size="small" color={Colors.lime} />}
+              </View>
+
+              {/* Role selector */}
+              <Text style={[modalStyles.fieldLabel, { marginTop: 14 }]}>Role</Text>
+              <View style={modalStyles.chipRow}>
+                {(['PLAYER', 'SCOREKEEPER'] as const).map(r => (
+                  <TouchableOpacity
+                    key={r}
+                    style={[modalStyles.chip, selectedRole === r && modalStyles.chipActive]}
+                    onPress={() => setSelectedRole(r)}
+                  >
+                    <Text style={[modalStyles.chipText, selectedRole === r && modalStyles.chipTextActive]}>{r}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Selected player preview */}
+              {selectedPlayer && (
+                <View style={modalStyles.selectedPlayer}>
+                  <Ionicons name="checkmark-circle" size={16} color={Colors.lime} />
+                  <Text style={modalStyles.selectedPlayerText}>{selectedPlayer.name}</Text>
+                  <TouchableOpacity onPress={() => setSelectedPlayer(null)}>
+                    <Ionicons name="close-circle-outline" size={18} color={Colors.textMuted} />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Search results */}
+              <FlatList
+                data={playerResults}
+                keyExtractor={u => u.id}
+                style={{ marginTop: 12, maxHeight: 340 }}
+                keyboardShouldPersistTaps="handled"
+                renderItem={({ item: u }) => (
+                  <TouchableOpacity
+                    style={[
+                      modalStyles.playerRow,
+                      selectedPlayer?.id === u.id && modalStyles.playerRowSelected,
+                    ]}
+                    onPress={() => setSelectedPlayer(u)}
+                  >
+                    <AvatarRing uri={u.avatar} name={u.name} size={36} ring="none" />
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Text style={modalStyles.playerName}>{u.name}</Text>
+                      {u.username && <Text style={modalStyles.playerUsername}>@{u.username}</Text>}
+                    </View>
+                    {u.handicap != null && (
+                      <Text style={modalStyles.playerHcp}>HCP {u.handicap}</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={playerSearch.length >= 2 && !playerSearching ? (
+                  <Text style={modalStyles.noResults}>No users found</Text>
+                ) : null}
+              />
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -1139,4 +1718,109 @@ const styles = StyleSheet.create({
   errorTitle:    { color: Colors.textPrimary, fontSize: 16, fontWeight: '700', marginTop: 12 },
   retryBtn:      { marginTop: 12, paddingHorizontal: 20, paddingVertical: 10, backgroundColor: Colors.limeDim, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.lime + '44' },
   retryText:     { color: Colors.lime, fontSize: 13, fontWeight: '700' },
+
+  // Admin controls
+  adminHeaderBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    alignSelf: 'flex-end', marginBottom: 12,
+    paddingHorizontal: 14, paddingVertical: 8,
+    backgroundColor: Colors.limeDim, borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.lime + '44',
+  },
+  adminHeaderBtnText: { color: Colors.lime, fontSize: 13, fontWeight: '700' },
+
+  // Participants section
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  sectionAddBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: Colors.limeDim, borderWidth: 1, borderColor: Colors.lime + '44',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  roleBadge: { borderRadius: Radius.full, paddingHorizontal: 8, paddingVertical: 3, marginRight: 8 },
+  roleBadgeLime:   { backgroundColor: Colors.limeDim, borderWidth: 1, borderColor: Colors.lime + '33' },
+  roleBadgePurple: { backgroundColor: Colors.purpleDim, borderWidth: 1, borderColor: Colors.purple + '33' },
+  roleBadgeText:   { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+});
+
+// ─── Modal styles ─────────────────────────────────────────────────────────────
+
+const modalStyles = StyleSheet.create({
+  sheet: {
+    flex: 1, backgroundColor: Colors.bg, paddingHorizontal: Spacing.md,
+  },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  cancelText: { color: Colors.textSecondary, fontSize: 15 },
+  title:      { color: Colors.textPrimary, fontSize: 16, fontWeight: '700' },
+  submitBtn: {
+    backgroundColor: Colors.lime, borderRadius: Radius.full,
+    paddingHorizontal: 18, paddingVertical: 8, minWidth: 56, alignItems: 'center',
+  },
+  submitText: { color: Colors.bg, fontSize: 14, fontWeight: '800' },
+
+  body: { paddingBottom: 40 },
+
+  fieldLabel: {
+    color: Colors.textSecondary, fontSize: 12, fontWeight: '600',
+    letterSpacing: 0.5, marginBottom: 8, marginTop: 16,
+    textTransform: 'uppercase',
+  },
+  input: {
+    backgroundColor: Colors.bgSecondary, borderWidth: 1, borderColor: Colors.cardBorder,
+    borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 12,
+    color: Colors.textPrimary, fontSize: 14,
+  },
+  textArea: { minHeight: 96, textAlignVertical: 'top' },
+
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.full,
+    borderWidth: 1, borderColor: Colors.cardBorder, backgroundColor: Colors.bgSecondary,
+  },
+  chipActive: { backgroundColor: Colors.limeDim, borderColor: Colors.lime },
+  chipText:   { color: Colors.textSecondary, fontSize: 13, fontWeight: '600' },
+  chipTextActive: { color: Colors.lime },
+
+  stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 20 },
+  stepperBtn: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: Colors.bgSecondary, borderWidth: 1, borderColor: Colors.cardBorder,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  stepperValue: { color: Colors.textPrimary, fontSize: 22, fontWeight: '800', minWidth: 32, textAlign: 'center' },
+
+  dateBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: Colors.bgSecondary, borderWidth: 1, borderColor: Colors.cardBorder,
+    borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 12,
+  },
+  dateBtnText: { color: Colors.textPrimary, fontSize: 14 },
+
+  searchRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: Colors.bgSecondary, borderWidth: 1, borderColor: Colors.cardBorder,
+    borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 10,
+    marginTop: 4,
+  },
+  searchInput: { flex: 1, color: Colors.textPrimary, fontSize: 14 },
+
+  selectedPlayer: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.limeDim, borderRadius: Radius.md,
+    paddingHorizontal: 12, paddingVertical: 10,
+    marginTop: 12, borderWidth: 1, borderColor: Colors.lime + '44',
+  },
+  selectedPlayerText: { color: Colors.lime, fontSize: 14, fontWeight: '600', flex: 1 },
+
+  playerRow: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: Colors.cardBorder + '55',
+  },
+  playerRowSelected: { backgroundColor: Colors.limeDim + '66' },
+  playerName:     { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  playerUsername: { color: Colors.textSecondary, fontSize: 12, marginTop: 1 },
+  playerHcp:      { color: Colors.lime, fontSize: 12, fontWeight: '700' },
+  noResults:      { color: Colors.textMuted, fontSize: 13, textAlign: 'center', paddingVertical: 20 },
 });
