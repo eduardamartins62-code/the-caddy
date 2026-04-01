@@ -157,8 +157,20 @@ export const scoresApi = {
 // ─── Social ──────────────────────────────────────────────────────────────────
 
 export const postsApi = {
-  getFeed: (feed: 'friends' | 'discover', page = 1) =>
-    request<import('@the-caddy/shared').SocialPost[]>(`/posts?feed=${feed}&page=${page}`),
+  // Returns { items, nextCursor, hasMore } — uses raw fetch to preserve pagination metadata
+  getFeed: async (feed: 'friends' | 'discover', cursor?: string): Promise<{ items: import('@the-caddy/shared').SocialPost[]; nextCursor: string | null; hasMore: boolean }> => {
+    const url = `${API_BASE}/posts?feed=${feed}${cursor ? `&cursor=${cursor}` : ''}`;
+    const token = await (async () => {
+      const { Platform } = await import('react-native');
+      if (Platform.OS === 'web') { try { return localStorage.getItem('auth_token'); } catch { return null; } }
+      const SecureStore = await import('expo-secure-store');
+      return SecureStore.getItemAsync('auth_token');
+    })();
+    const res = await fetch(url, { headers: { Authorization: token ? `Bearer ${token}` : '' } });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Request failed');
+    return { items: json.data ?? [], nextCursor: json.nextCursor ?? null, hasMore: json.hasMore ?? false };
+  },
   like: (id: string) => request(`/posts/${id}/like`, { method: 'POST' }),
   unlike: (id: string) => request(`/posts/${id}/like`, { method: 'DELETE' }),
   delete: (id: string) => request(`/posts/${id}`, { method: 'DELETE' }),

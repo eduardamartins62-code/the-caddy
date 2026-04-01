@@ -816,13 +816,13 @@ export default function SocialScreen() {
     refetch,
   } = useInfiniteQuery({
     queryKey: ['feed', tab],
-    queryFn: ({ pageParam = 1 }) => postsApi.getFeed(tab, pageParam as number) as Promise<SocialPost[]>,
-    getNextPageParam: (lastPage: SocialPost[], allPages: SocialPost[][]) =>
-      lastPage.length === 0 ? undefined : allPages.length + 1,
-    initialPageParam: 1,
+    queryFn: ({ pageParam }: { pageParam?: string }) => postsApi.getFeed(tab, pageParam),
+    getNextPageParam: (lastPage) =>
+      lastPage.hasMore && lastPage.nextCursor ? lastPage.nextCursor : undefined,
+    initialPageParam: undefined as string | undefined,
   });
 
-  const posts: SocialPost[] = feedData?.pages.flat() ?? [];
+  const posts: SocialPost[] = feedData?.pages.flatMap(p => p.items) ?? [];
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

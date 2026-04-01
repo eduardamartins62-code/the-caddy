@@ -28,14 +28,21 @@ export default function CreateScreen() {
   const [content, setContent] = useState('');
   const [courseTag, setCourseTag] = useState('');
   const [mediaUri, setMediaUri] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function pickMedia() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       quality: 0.8,
+      videoMaxDuration: 60,
     });
-    if (!result.canceled) setMediaUri(result.assets[0].uri);
+    if (!result.canceled) {
+      const asset = result.assets[0];
+      setMediaUri(asset.uri);
+      // Use expo-image-picker's type field — reliable on both iOS and Android
+      setMediaType(asset.type === 'video' ? 'video' : 'image');
+    }
   }
 
   async function handlePost() {
@@ -46,17 +53,17 @@ export default function CreateScreen() {
       const formData = new FormData();
       formData.append('content', content.trim());
       if (courseTag) formData.append('courseTag', courseTag);
-      if (mediaUri) {
-        const filename = mediaUri.split('/').pop()!;
-        const type = filename.endsWith('.mp4') || filename.endsWith('.mov') ? 'video/mp4' : 'image/jpeg';
-        formData.append('media', { uri: mediaUri, name: filename, type } as unknown as Blob);
+      if (mediaUri && mediaType) {
+        const filename = mediaUri.split('/').pop() || (mediaType === 'video' ? 'upload.mp4' : 'upload.jpg');
+        const mimeType = mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
+        formData.append('media', { uri: mediaUri, name: filename, type: mimeType } as unknown as Blob);
       }
       await fetch(`${API_BASE}/posts`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-      setContent(''); setCourseTag(''); setMediaUri(null);
+      setContent(''); setCourseTag(''); setMediaUri(null); setMediaType(null);
       Alert.alert('Posted!', 'Your post is live.', [{ text: 'OK', onPress: () => router.push('/(tabs)/social') }]);
     } catch {
       Alert.alert('Error', 'Failed to post. Try again.');
@@ -115,7 +122,7 @@ export default function CreateScreen() {
         {mediaUri ? (
           <View style={styles.mediaWrap}>
             <Image source={{ uri: mediaUri }} style={styles.mediaImg} resizeMode="cover" />
-            <TouchableOpacity style={styles.removeMedia} onPress={() => setMediaUri(null)}>
+            <TouchableOpacity style={styles.removeMedia} onPress={() => { setMediaUri(null); setMediaType(null); }}>
               <CircleX size={28} stroke={Colors.error} strokeWidth={2} />
             </TouchableOpacity>
           </View>

@@ -376,6 +376,21 @@ router.delete('/:id/itinerary/:itemId', authenticate, async (req: AuthRequest, r
   }
 });
 
+// GET /api/events/:id/history
+router.get('/:id/history', async (req, res: Response) => {
+  try {
+    const entries = await prisma.historyEntry.findMany({
+      where:   { eventId: req.params.id },
+      orderBy: { year: 'desc' },
+      include: { historyPhotos: true },
+    });
+    res.json({ data: entries });
+  } catch (err) {
+    console.error('GET /events/:id/history error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // POST /api/events/:id/history
 router.post('/:id/history', authenticate, async (req: AuthRequest, res: Response) => {
   try {
