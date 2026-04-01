@@ -75,10 +75,7 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "expo-font",
-      "@expo-google-fonts/cormorant-garamond",
-      "@expo-google-fonts/dm-sans",
-      "@expo-google-fonts/dm-mono"
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
