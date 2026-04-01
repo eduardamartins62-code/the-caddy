@@ -121,8 +121,7 @@ export default function CreateEventScreen() {
   // Step 1 - Basic Info
   const [name, setName]               = useState('');
   const [description, setDescription] = useState('');
-  const [courseName, setCourseName]   = useState('');
-  const [courseId, setCourseId]       = useState<string | null>(null);
+  const [courses, setCourses]         = useState<Array<{ id?: string; name: string }>>([]);
   const [eventType, setEventType]     = useState<EventTypeId>(isQuickGame ? 'CASUAL' : 'TOURNAMENT');
 
   // Step 2 - Schedule
@@ -205,8 +204,9 @@ export default function CreateEventScreen() {
   // ─── Course selection ────────────────────────────────────────────────────
 
   function handleCourseSelect(course: GolfCourse) {
-    setCourseName(course.name);
-    setCourseId(course.id);
+    if (!courses.find(c => c.id === course.id && course.id)) {
+      setCourses(prev => [...prev, { id: course.id, name: course.name }]);
+    }
   }
 
   // ─── Player search ──────────────────────────────────────────────────────
@@ -274,8 +274,9 @@ export default function CreateEventScreen() {
       const payload: any = {
         name: name.trim(),
         description: description.trim() || undefined,
-        courseName: courseName.trim() || undefined,
-        courseId: courseId || undefined,
+        courseName: courses[0]?.name || undefined,
+        courseId: courses[0]?.id || undefined,
+        courseIds: courses.map(c => c.id).filter(Boolean),
         type: eventType,
         recurrence: isRecurring ? recurrence : 'ONE_TIME',
         recurrenceNote: isRecurring && recurrence === 'RECURRING_CUSTOM' ? recurrenceNote.trim() || undefined : undefined,
@@ -360,12 +361,27 @@ export default function CreateEventScreen() {
           })}
         </View>
 
-        {/* Course search */}
-        <Label optional>Golf Course</Label>
+        {/* Course search - multi-course support */}
+        <Label optional>Golf Courses</Label>
+        <Text style={styles.fieldNote}>Add multiple courses for multi-round events</Text>
+
+        {courses.map((c, i) => (
+          <View key={i} style={styles.courseChip}>
+            <Text style={styles.courseChipText} numberOfLines={1}>{c.name}</Text>
+            <TouchableOpacity onPress={() => setCourses(prev => prev.filter((_, idx) => idx !== i))}>
+              <Ionicons name="close" size={16} color={Colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        ))}
+
         <CourseSearchInput
-          value={courseName}
-          onSelect={handleCourseSelect}
-          placeholder="Search for a golf course..."
+          value=""
+          onSelect={(course) => {
+            if (!courses.find(c => c.id === course.id && course.id)) {
+              setCourses(prev => [...prev, { id: course.id, name: course.name }]);
+            }
+          }}
+          placeholder="Search and add a course..."
         />
       </ScrollView>
     </KeyboardAvoidingView>
@@ -656,7 +672,7 @@ export default function CreateEventScreen() {
 
             <SummaryRow icon="calendar-outline"    label="Start Date"  value={startDate ? formatDateDisplay(startDate) : '—'} />
             {endDate ? <SummaryRow icon="calendar-outline" label="End Date"    value={formatDateDisplay(endDate)} /> : null}
-            <SummaryRow icon="location-outline"    label="Course"      value={courseName || '—'} />
+            <SummaryRow icon="location-outline"    label="Course"      value={courses.length > 0 ? courses.map(c => c.name).join(', ') : '—'} />
             <SummaryRow icon="golf-outline"        label="Format"      value={selectedFormat?.label ?? format} />
             <SummaryRow icon="trophy-outline"      label="Type"        value={selectedEventType ? `${selectedEventType.emoji} ${selectedEventType.label}` : eventType} />
             <SummaryRow icon="repeat-outline"      label="Recurrence"  value={isRecurring ? (RECURRENCE_OPTIONS.find(r => r.id === recurrence)?.label ?? recurrence) : 'One-time'} />
@@ -933,6 +949,15 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.warning + '44',
   },
   warningText: { color: Colors.warning, fontSize: 13, fontWeight: '600' },
+
+  // Course chips
+  courseChip: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: Colors.card, borderRadius: Radius.sm,
+    paddingHorizontal: 12, paddingVertical: 10, marginBottom: 6,
+  },
+  courseChipText: { color: Colors.textPrimary, flex: 1, marginRight: 8 },
+  fieldNote: { color: Colors.textMuted, fontSize: 12, marginBottom: 8, marginTop: -4 },
 
   // Footer nav
   footer: {

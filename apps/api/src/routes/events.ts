@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
 import { authenticate, requireScorekeeper, AuthRequest } from '../middleware/auth';
+import { upload } from '../lib/cloudinary';
 
 const router = Router();
 
@@ -54,6 +55,7 @@ router.get('/:id', async (req, res: Response) => {
     include: {
       participants: { include: { user: { select: { id: true, name: true, avatar: true, handicap: true } } } },
       rounds:       { orderBy: { date: 'asc' } },
+      itinerary:    { orderBy: { day: 'asc' } },
       history:      { orderBy: { year: 'desc' } },
       _count:       { select: { rounds: true, participants: true } },
     },
@@ -233,14 +235,27 @@ router.get('/:id/social', async (req, res: Response) => {
 });
 
 // POST /api/events/:id/participants
-router.post('/:id/participants', authenticate, requireScorekeeper, async (req: AuthRequest, res: Response) => {
-  const { userId, role = 'PLAYER' } = req.body;
-  const participant = await prisma.eventParticipant.upsert({
-    where:  { eventId_userId: { eventId: req.params.id, userId } },
-    update: { role },
-    create: { eventId: req.params.id, userId, role, status: 'ACCEPTED' },
-  });
-  res.json({ data: participant });
+router.post('/:id/participants', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const event = await prisma.event.findUnique({ where: { id: req.params.id } });
+    if (!event) { res.status(404).json({ error: 'Event not found' }); return; }
+    const isOrganizer = event.createdBy === req.user!.id;
+    const isScorekeeper = await prisma.eventParticipant.findFirst({
+      where: { eventId: req.params.id, userId: req.user!.id, role: 'SCOREKEEPER' }
+    });
+    if (!isOrganizer && !isScorekeeper) { res.status(403).json({ error: 'Insufficient permissions' }); return; }
+
+    const { userId, role = 'PLAYER' } = req.body;
+    const participant = await prisma.eventParticipant.upsert({
+      where:  { eventId_userId: { eventId: req.params.id, userId } },
+      update: { role },
+      create: { eventId: req.params.id, userId, role, status: 'ACCEPTED' },
+    });
+    res.json({ data: participant });
+  } catch (err) {
+    console.error('POST /events/:id/participants error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // DELETE /api/events/:id/participants/:userId
@@ -259,6 +274,131 @@ router.put('/:id/status', authenticate, requireScorekeeper, async (req: AuthRequ
     data:  { status },
   });
   res.json({ data: event });
+});
+
+// POST /api/events/:id/itinerary
+router.post('/:id/itinerary', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const event = await prisma.event.findUnique({ where: { id: req.params.id } });
+    if (!event) { res.status(404).json({ error: 'Event not found' }); return; }
+    const isOrganizer = event.createdBy === req.user!.id;
+    const isScorekeeper = await prisma.eventParticipant.findFirst({
+      where: { eventId: req.params.id, userId: req.user!.id, role: 'SCOREKEEPER' }
+    });
+    if (!isOrganizer && !isScorekeeper) { res.status(403).json({ error: 'Insufficient permissions' }); return; }
+
+    const { day, type, title, description, location, mapLink, time, photoUrl } = req.body;
+    if (!title) { res.status(400).json({ error: 'Title is required' }); return; }
+
+    const item = await prisma.itineraryItem.create({
+      data: {
+        eventId: req.params.id,
+        day: day || 1,
+        type: type || 'GOLF',
+        title,
+        description,
+        location,
+        mapLink,
+        time,
+        photoUrl,
+      }
+    });
+    res.status(201).json({ data: item });
+  } catch (err) {
+    console.error('POST /events/:id/itinerary error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/events/:id/itinerary/:itemId
+router.put('/:id/itinerary/:itemId', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const event = await prisma.event.findUnique({ where: { id: req.params.id } });
+    if (!event) { res.status(404).json({ error: 'Event not found' }); return; }
+    const isOrganizer = event.createdBy === req.user!.id;
+    const isScorekeeper = await prisma.eventParticipant.findFirst({
+      where: { eventId: req.params.id, userId: req.user!.id, role: 'SCOREKEEPER' }
+    });
+    if (!isOrganizer && !isScorekeeper) { res.status(403).json({ error: 'Insufficient permissions' }); return; }
+
+    const { day, type, title, description, location, mapLink, time, photoUrl } = req.body;
+    const item = await prisma.itineraryItem.update({
+      where: { id: req.params.itemId },
+      data: { day, type, title, description, location, mapLink, time, photoUrl }
+    });
+    res.json({ data: item });
+  } catch (err) {
+    console.error('PUT /events/:id/itinerary/:itemId error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/events/:id/itinerary/:itemId
+router.delete('/:id/itinerary/:itemId', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    await prisma.itineraryItem.delete({ where: { id: req.params.itemId } });
+    res.json({ data: { success: true } });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/events/:id/history
+router.post('/:id/history', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const event = await prisma.event.findUnique({ where: { id: req.params.id } });
+    if (!event) { res.status(404).json({ error: 'Event not found' }); return; }
+    const isOrganizer = event.createdBy === req.user!.id;
+    if (!isOrganizer) { res.status(403).json({ error: 'Only the organizer can add history' }); return; }
+
+    const { year, champion, winningScore, coursePlayed, recap, photos } = req.body;
+    if (!year) { res.status(400).json({ error: 'Year is required' }); return; }
+
+    const entry = await prisma.historyEntry.upsert({
+      where: { eventId_year: { eventId: req.params.id, year: parseInt(year) } },
+      update: { champion, winningScore: winningScore ? parseInt(winningScore) : null, coursePlayed, recap },
+      create: {
+        eventId: req.params.id,
+        year: parseInt(year),
+        champion,
+        winningScore: winningScore ? parseInt(winningScore) : null,
+        coursePlayed,
+        recap,
+      }
+    });
+
+    // Add photos if provided
+    if (photos && Array.isArray(photos) && photos.length > 0) {
+      await prisma.historyPhoto.createMany({
+        data: photos.map((url: string) => ({ historyEntryId: entry.id, url }))
+      });
+    }
+
+    const entryWithPhotos = await prisma.historyEntry.findUnique({
+      where: { id: entry.id },
+      include: { photos: true }
+    });
+    res.status(201).json({ data: entryWithPhotos });
+  } catch (err) {
+    console.error('POST /events/:id/history error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/events/:id/history/:historyId/photos
+router.post('/:id/history/:historyId/photos', authenticate, upload.single('photo'), async (req: AuthRequest, res: Response) => {
+  try {
+    const file = req.file as any;
+    if (!file?.path) { res.status(400).json({ error: 'No photo uploaded' }); return; }
+
+    const photo = await prisma.historyPhoto.create({
+      data: { historyEntryId: req.params.historyId, url: file.path }
+    });
+    res.status(201).json({ data: photo });
+  } catch (err) {
+    console.error('POST history photo error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 export default router;

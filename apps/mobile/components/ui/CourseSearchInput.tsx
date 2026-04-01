@@ -10,7 +10,7 @@ import { API_BASE } from '../../constants/api';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface GolfCourse {
-  id: string;
+  id?: string;
   name: string;
   city: string;
   state: string;
@@ -119,10 +119,10 @@ export default function CourseSearchInput({
         <View style={styles.dropdown}>
           {results.map((course, idx) => (
             <TouchableOpacity
-              key={course.id}
+              key={course.id ?? idx}
               style={[
                 styles.resultRow,
-                idx < results.length - 1 && styles.resultRowBorder,
+                styles.resultRowBorder,
               ]}
               onPress={() => handleSelect(course)}
               activeOpacity={0.7}
@@ -141,13 +141,39 @@ export default function CourseSearchInput({
               <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
             </TouchableOpacity>
           ))}
+          {query.trim().length >= 2 && (
+            <TouchableOpacity
+              style={styles.customCourseRow}
+              onPress={() => {
+                onSelect({ id: undefined, name: query.trim(), city: '', state: '' });
+                setResults([]);
+                setOpen(false);
+                setQuery('');
+              }}
+            >
+              <Text style={styles.customCourseText}>+ Use "{query.trim()}" as custom course</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
       {/* No results state */}
       {open && !loading && results.length === 0 && query.length >= 2 && (
-        <View style={styles.noResults}>
-          <Text style={styles.noResultsText}>No courses found for "{query}"</Text>
+        <View style={styles.dropdown}>
+          <View style={styles.noResults}>
+            <Text style={styles.noResultsText}>No courses found for "{query}"</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.customCourseRow}
+            onPress={() => {
+              onSelect({ id: undefined, name: query.trim(), city: '', state: '' });
+              setResults([]);
+              setOpen(false);
+              setQuery('');
+            }}
+          >
+            <Text style={styles.customCourseText}>+ Use "{query.trim()}" as custom course</Text>
+          </TouchableOpacity>
         </View>
       )}
     </View>
@@ -225,11 +251,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   noResults: {
-    backgroundColor: Colors.bgSecondary,
-    borderWidth: 1.5,
-    borderColor: Colors.cardBorder,
-    borderRadius: Radius.md,
-    marginTop: 4,
     paddingHorizontal: Spacing.md,
     paddingVertical: 14,
   },
@@ -237,5 +258,14 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 13,
     textAlign: 'center',
+  },
+  customCourseRow: {
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.cardBorder,
+  },
+  customCourseText: {
+    color: Colors.lime,
+    fontSize: 13,
   },
 });

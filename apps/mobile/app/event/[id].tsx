@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   RefreshControl, Modal, ActivityIndicator, Alert,
-  TextInput, KeyboardAvoidingView, Platform, FlatList,
+  TextInput, KeyboardAvoidingView, Platform, FlatList, Image,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,6 +10,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as ImagePicker from 'expo-image-picker';
+import * as SecureStore from 'expo-secure-store';
+import { API_BASE } from '../../constants/api';
 import {
   useEvent,
   useEventLeaderboard,
@@ -130,6 +133,8 @@ export default function EventDetailScreen() {
     location: '',
     time: '',
   });
+  const [itinTime, setItinTime] = useState<Date>(new Date());
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [itinSubmitting, setItinSubmitting] = useState(false);
 
   // ─── History modal state ───────────────────────────────────────────────────
@@ -141,6 +146,7 @@ export default function EventDetailScreen() {
     coursePlayed: '',
     recap: '',
   });
+  const [historyPhotos, setHistoryPhotos] = useState<string[]>([]);
   const [histSubmitting, setHistSubmitting] = useState(false);
 
   // ─── Round modal state ─────────────────────────────────────────────────────
@@ -292,9 +298,11 @@ export default function EventDetailScreen() {
     }
     setItinSubmitting(true);
     try {
-      await eventsApi.addItineraryItem(id, itinForm);
+      const formattedTime = itinTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      await eventsApi.addItineraryItem(id, { ...itinForm, time: formattedTime });
       setItinModalVisible(false);
       setItinForm({ type: 'GOLF', day: 1, title: '', description: '', location: '', time: '' });
+      setItinTime(new Date());
       await refetchItin();
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to add itinerary item');
@@ -312,15 +320,31 @@ export default function EventDetailScreen() {
     }
     setHistSubmitting(true);
     try {
-      await eventsApi.addHistory(id, {
+      const newEntry = await eventsApi.addHistory(id, {
         year: Number(histForm.year),
         champion: histForm.champion,
         winningScore: histForm.winningScore ? Number(histForm.winningScore) : undefined,
         coursePlayed: histForm.coursePlayed || undefined,
         recap: histForm.recap || undefined,
       });
+      // Upload photos if any
+      if (historyPhotos.length > 0 && newEntry?.id) {
+        for (const photoUri of historyPhotos) {
+          try {
+            const token = await SecureStore.getItemAsync('auth_token');
+            const formData = new FormData();
+            formData.append('photo', { uri: photoUri, type: 'image/jpeg', name: 'photo.jpg' } as any);
+            await fetch(`${API_BASE}/events/${id}/history/${newEntry.id}/photos`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}` },
+              body: formData,
+            });
+          } catch { /* silently ignore individual photo upload failures */ }
+        }
+      }
       setHistModalVisible(false);
       setHistForm({ year: new Date().getFullYear(), champion: '', winningScore: '', coursePlayed: '', recap: '' });
+      setHistoryPhotos([]);
       await refetchHistory();
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to add history entry');
@@ -1257,13 +1281,25 @@ export default function EventDetailScreen() {
               />
 
               <Text style={modalStyles.fieldLabel}>Time</Text>
-              <TextInput
+              <TouchableOpacity
                 style={modalStyles.input}
-                placeholder="e.g. 7:30 AM"
-                placeholderTextColor={Colors.textMuted}
-                value={itinForm.time}
-                onChangeText={v => setItinForm(f => ({ ...f, time: v }))}
-              />
+                onPress={() => setShowTimePicker(true)}
+              >
+                <Text style={{ color: itinTime ? Colors.textPrimary : Colors.textMuted }}>
+                  {itinTime ? itinTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : 'Select time'}
+                </Text>
+              </TouchableOpacity>
+              {showTimePicker && (
+                <DateTimePicker
+                  value={itinTime || new Date()}
+                  mode="time"
+                  display="spinner"
+                  onChange={(e, date) => {
+                    setShowTimePicker(false);
+                    if (date) setItinTime(date);
+                  }}
+                />
+              )}
 
               <Text style={modalStyles.fieldLabel}>Location</Text>
               <TextInput
@@ -1360,6 +1396,33 @@ export default function EventDetailScreen() {
                 multiline
                 numberOfLines={5}
               />
+
+              <Text style={modalStyles.fieldLabel}>Photos</Text>
+              <TouchableOpacity
+                style={[modalStyles.input, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}
+                onPress={async () => {
+                  const result = await ImagePicker.launchImageLibraryAsync({
+                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                    allowsMultipleSelection: true,
+                    quality: 0.8,
+                  });
+                  if (!result.canceled) {
+                    setHistoryPhotos(prev => [...prev, ...result.assets.map(a => a.uri)]);
+                  }
+                }}
+              >
+                <Text style={{ color: Colors.lime }}>+ Add Photos</Text>
+              </TouchableOpacity>
+
+              {historyPhotos.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+                  {historyPhotos.map((uri, i) => (
+                    <TouchableOpacity key={i} onPress={() => setHistoryPhotos(prev => prev.filter((_, idx) => idx !== i))}>
+                      <Image source={{ uri }} style={{ width: 70, height: 70, borderRadius: 8, marginRight: 8 }} />
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
             </ScrollView>
           </View>
         </KeyboardAvoidingView>

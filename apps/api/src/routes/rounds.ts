@@ -5,30 +5,46 @@ import { authenticate, requireScorekeeper, AuthRequest } from '../middleware/aut
 const router = Router();
 
 // POST /api/rounds
-router.post('/', authenticate, requireScorekeeper, async (req: AuthRequest, res: Response) => {
-  const { eventId, courseId, courseName, coursePhoto, date, holes } = req.body as {
-    eventId:     string;
-    courseId?:   string;
-    courseName:  string;
-    coursePhoto?: string;
-    date:        string;
-    holes:       { holeNumber: number; par: number }[];
-  };
+router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { eventId, courseName, courseId, date, holes, roundNumber } = req.body;
+    if (!eventId || !courseName || !date) {
+      res.status(400).json({ error: 'eventId, courseName, and date are required' }); return;
+    }
 
-  const round = await prisma.round.create({
-    data: {
-      eventId,
-      courseId:   courseId || null,
-      courseName,
-      coursePhoto: coursePhoto || null,
-      date:        new Date(date),
-      holes: {
-        create: holes.map(h => ({ holeNumber: h.holeNumber, par: h.par })),
+    // Check permission: must be event organizer or SCOREKEEPER participant
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) { res.status(404).json({ error: 'Event not found' }); return; }
+
+    const isOrganizer = event.createdBy === req.user!.id;
+    const isScorekeeper = await prisma.eventParticipant.findFirst({
+      where: { eventId, userId: req.user!.id, role: 'SCOREKEEPER' }
+    });
+    if (!isOrganizer && !isScorekeeper) {
+      res.status(403).json({ error: 'Only the event organizer or scorekeeper can create rounds' }); return;
+    }
+
+    const round = await prisma.round.create({
+      data: {
+        eventId,
+        courseName,
+        courseId,
+        date: new Date(date),
+        roundNumber,
+        holes: holes?.length ? {
+          create: holes.map((h: { holeNumber: number; par: number }) => ({
+            holeNumber: h.holeNumber,
+            par: h.par,
+          }))
+        } : undefined,
       },
-    },
-    include: { holes: true },
-  });
-  res.status(201).json({ data: round });
+      include: { holes: true },
+    });
+    res.status(201).json({ data: round });
+  } catch (err) {
+    console.error('POST /rounds error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // GET /api/rounds/active — get the user's currently active (in-progress) round
@@ -76,11 +92,19 @@ router.get('/:id', async (req, res: Response) => {
   res.json({ data: round });
 });
 
-// PUT /api/rounds/:id — update round metadata (SCOREKEEPER+)
-router.put('/:id', authenticate, requireScorekeeper, async (req: AuthRequest, res: Response) => {
+// PUT /api/rounds/:id — update round metadata (organizer or SCOREKEEPER)
+router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
+  const round = await prisma.round.findUnique({ where: { id: req.params.id }, include: { event: true } });
+  if (!round) { res.status(404).json({ error: 'Round not found' }); return; }
+  const isOrganizer = round.event.createdBy === req.user!.id;
+  const isScorekeeper = await prisma.eventParticipant.findFirst({
+    where: { eventId: round.eventId, userId: req.user!.id, role: 'SCOREKEEPER' }
+  });
+  if (!isOrganizer && !isScorekeeper) { res.status(403).json({ error: 'Insufficient permissions' }); return; }
+
   const { date, status, courseId, courseName, isComplete } = req.body;
 
-  const round = await prisma.round.update({
+  const updated = await prisma.round.update({
     where: { id: req.params.id },
     data: {
       ...(date        ? { date: new Date(date) } : {}),
@@ -91,7 +115,7 @@ router.put('/:id', authenticate, requireScorekeeper, async (req: AuthRequest, re
     },
     include: { holes: { orderBy: { holeNumber: 'asc' } } },
   });
-  res.json({ data: round });
+  res.json({ data: updated });
 });
 
 // DELETE /api/rounds/:id — organizer only, emits round:status

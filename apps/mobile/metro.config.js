@@ -35,4 +35,12 @@ config.server.enhanceMiddleware = (metroMiddleware, server) => {
   };
 };
 
+// Mock react-native-reanimated on web to avoid native-only startup errors
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (platform === 'web' && moduleName === 'react-native-reanimated') {
+    return context.resolveRequest(context, 'react-native-reanimated/mock', platform);
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 module.exports = config;
