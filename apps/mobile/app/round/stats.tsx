@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { roundsApi } from '../../services/api';
 import GlassCard from '../../components/ui/GlassCard';
+import ShareableScoreCard from '../../components/ui/ShareableScoreCard';
 import { Colors, Radius, Spacing } from '../../constants/theme';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -226,6 +227,21 @@ export default function RoundStatsScreen() {
               })}
             </GlassCard>
           </>
+        )}
+
+        {/* ── Shareable Score Card ── */}
+        {stats.players && stats.players.length > 0 && stats.holes && (
+          <ShareableScoreCard
+            playerName={stats.players[0]?.name ?? 'Player'}
+            courseName={stats.courseName ?? 'Course'}
+            date={stats.date ? new Date(stats.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
+            scores={(stats.holes ?? []).map((h: any) => ({
+              hole: h.holeNumber,
+              par: h.par ?? 4,
+              strokes: stats.players[0]?.scores?.[h.holeNumber] ?? 0,
+            }))}
+            handicap={stats.players[0]?.handicap ?? undefined}
+          />
         )}
 
         {/* ── Play Again button ── */}

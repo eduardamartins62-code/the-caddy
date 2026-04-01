@@ -3,6 +3,7 @@ import { io } from '../index';
 import prisma from '../lib/prisma';
 import { emitLeaderboardUpdate } from '../lib/socket';
 import { authenticate, requireScorekeeper, AuthRequest } from '../middleware/auth';
+import { checkAndAwardBadges } from './badges';
 
 const router = Router();
 
@@ -68,6 +69,9 @@ router.post('/', authenticate, requireScorekeeper, async (req: AuthRequest, res:
   });
 
   await buildAndEmitLeaderboard(roundId);
+
+  // Check and award badges asynchronously — don't block response
+  checkAndAwardBadges(userId).catch(console.error);
 
   res.status(201).json({ data: score });
 });

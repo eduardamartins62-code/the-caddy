@@ -465,7 +465,7 @@ export default function AdminHistoryScreen() {
 
   const { data: entries = [], isLoading, error, refetch } = useQuery<HistoryEntry[]>({
     queryKey: ['history-admin'],
-    queryFn: () => historyApi.list() as Promise<HistoryEntry[]>,
+    queryFn: () => historyApi.list() as unknown as Promise<HistoryEntry[]>,
   });
 
   const sortedEntries = [...entries].sort((a, b) => b.year - a.year);

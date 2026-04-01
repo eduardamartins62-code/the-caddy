@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Image, Text, StyleSheet } from 'react-native';
+import { View, Image, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Colors } from '../../constants/theme';
 
 interface Props {
@@ -8,9 +8,10 @@ interface Props {
   size?: number;
   ring?: 'lime' | 'purple' | 'none';
   ringWidth?: number;
+  style?: ViewStyle;
 }
 
-export default function AvatarRing({ uri, name, size = 40, ring = 'none', ringWidth = 2 }: Props) {
+export default function AvatarRing({ uri, name, size = 40, ring = 'none', ringWidth = 2, style }: Props) {
   const ringColor =
     ring === 'lime' ? Colors.lime :
     ring === 'purple' ? Colors.purple : 'transparent';
@@ -32,6 +33,7 @@ export default function AvatarRing({ uri, name, size = 40, ring = 'none', ringWi
         borderColor: ringColor,
         padding: ring !== 'none' ? 2 : 0,
       },
+      style,
     ]}>
       {uri ? (
         <Image

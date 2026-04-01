@@ -111,15 +111,21 @@ router.get('/:id/stats', async (req, res: Response) => {
   let bestRound   = { userId: '', score: Infinity, roundId: '' };
   const totalRoundsPlayed = new Set<string>();
   const birdiesByUser: Record<string, number>  = {};
-  const roundScoresByUser: Record<string, number> = {};
+  const eaglesByUser:  Record<string, number>  = {};
 
   for (const round of event.rounds) {
     const roundGrossByUser: Record<string, number> = {};
 
     for (const score of round.scores) {
       const hole = round.holes.find(h => h.holeNumber === score.holeNumber);
-      if (hole && score.strokes - hole.par === -1) {
-        birdiesByUser[score.userId] = (birdiesByUser[score.userId] || 0) + 1;
+      if (hole) {
+        const diff = score.strokes - hole.par;
+        if (diff === -1) {
+          birdiesByUser[score.userId] = (birdiesByUser[score.userId] || 0) + 1;
+        }
+        if (diff <= -2) {
+          eaglesByUser[score.userId] = (eaglesByUser[score.userId] || 0) + 1;
+        }
       }
       roundGrossByUser[score.userId] = (roundGrossByUser[score.userId] || 0) + score.strokes;
       totalRoundsPlayed.add(`${round.id}:${score.userId}`);
@@ -136,9 +142,15 @@ router.get('/:id/stats', async (req, res: Response) => {
     if (count > mostBirdies.count) mostBirdies = { userId: uid, count };
   }
 
+  let mostEagles = { userId: '', count: 0 };
+  for (const [uid, count] of Object.entries(eaglesByUser)) {
+    if (count > mostEagles.count) mostEagles = { userId: uid, count };
+  }
+
   res.json({
     data: {
       mostBirdies:       mostBirdies.userId ? mostBirdies : null,
+      mostEagles:        mostEagles.userId  ? mostEagles  : null,
       bestRound:         bestRound.userId   ? bestRound   : null,
       totalRoundsPlayed: totalRoundsPlayed.size,
     },
@@ -148,6 +160,7 @@ router.get('/:id/stats', async (req, res: Response) => {
 // POST /api/events/:id/invite
 router.post('/:id/invite', authenticate, requireScorekeeper, async (req: AuthRequest, res: Response) => {
   const { userIds } = req.body as { userIds: string[] };
+  const event = await prisma.event.findUnique({ where: { id: req.params.id }, select: { name: true } });
   // Upsert each participant to handle duplicates gracefully
   const invites = await Promise.all(
     userIds.map((userId: string) =>
@@ -158,6 +171,22 @@ router.post('/:id/invite', authenticate, requireScorekeeper, async (req: AuthReq
       })
     )
   );
+  // Send notifications
+  if (event) {
+    await Promise.all(
+      userIds.map((userId: string) =>
+        prisma.notification.create({
+          data: {
+            userId,
+            type: 'INVITE',
+            title: 'Event Invitation',
+            body: `You've been invited to ${event.name}`,
+            data: JSON.stringify({ eventId: req.params.id }),
+          },
+        }).catch(() => {})
+      )
+    );
+  }
   res.json({ data: invites });
 });
 
@@ -210,7 +239,11 @@ router.get('/:id/leaderboard', async (req, res: Response) => {
   });
 
   const sorted = leaderboard.sort((a, b) => a.netScore - b.netScore || a.grossScore - b.grossScore);
-  const ranked = sorted.map((entry, i) => ({ rank: i + 1, ...entry }));
+  const ranked = sorted.map((entry, i) => ({
+    rank: i + 1,
+    positionChange: 0, // placeholder — requires historical data to compute actual changes
+    ...entry,
+  }));
 
   res.json({ data: ranked });
 });
@@ -376,7 +409,7 @@ router.post('/:id/history', authenticate, async (req: AuthRequest, res: Response
 
     const entryWithPhotos = await prisma.historyEntry.findUnique({
       where: { id: entry.id },
-      include: { photos: true }
+      include: { historyPhotos: true }
     });
     res.status(201).json({ data: entryWithPhotos });
   } catch (err) {

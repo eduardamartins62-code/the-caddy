@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Bell, Settings, MapPin, Calendar, ArrowRight, MessageCircle, Users, Trophy, BarChart2, Flag } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
@@ -19,25 +19,25 @@ import { Colors, Radius, Spacing } from '../../constants/theme';
 // ─── Quick Actions ────────────────────────────────────────────────────────────
 
 const QUICK_ACTIONS = [
-  { label: 'Friends',     Icon: Users,    route: '/friends',            color: '#4A90D9' },
-  { label: 'Tournaments', Icon: Trophy,   route: '/event/create',       color: '#C9F31D' },
-  { label: 'Leaderboard', Icon: BarChart2, route: '/(tabs)/leaderboard', color: '#E8365D' },
-  { label: 'Courses',     Icon: Flag,     route: '/(tabs)/courses',     color: '#7B61FF' },
+  { label: 'Friends',     icon: 'people-outline',    route: '/friends',            color: Colors.teal },
+  { label: 'Tournaments', icon: 'trophy-outline',    route: '/event/create',       color: Colors.gold },
+  { label: 'Messages',    icon: 'chatbubble-outline', route: '/messages',           color: '#6C8BF5' },
+  { label: 'Courses',     icon: 'flag-outline',      route: '/(tabs)/courses',     color: '#C17B2E' },
 ] as const;
 
-function QuickActionsRow() {
+function QuickActionsGrid() {
   const router = useRouter();
   return (
-    <View style={qaStyles.row}>
-      {QUICK_ACTIONS.map(({ label, Icon, route, color }) => (
+    <View style={qaStyles.grid}>
+      {QUICK_ACTIONS.map(({ label, icon, route, color }) => (
         <TouchableOpacity
           key={label}
-          style={qaStyles.item}
+          style={qaStyles.cell}
           onPress={() => router.push(route as any)}
           activeOpacity={0.75}
         >
-          <View style={[qaStyles.iconBox, { backgroundColor: color + '22' }]}>
-            <Icon size={22} color={color} strokeWidth={1.8} />
+          <View style={[qaStyles.iconBox, { borderColor: color + '30' }]}>
+            <Ionicons name={icon as any} size={22} color={color} />
           </View>
           <Text style={qaStyles.label}>{label}</Text>
         </TouchableOpacity>
@@ -47,32 +47,41 @@ function QuickActionsRow() {
 }
 
 const qaStyles = StyleSheet.create({
-  row: {
+  grid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 24,
   },
-  item: {
-    width: 75,
+  cell: {
+    width: '47%',
+    backgroundColor: Colors.bgSecondary,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
   iconBox: {
-    width: 56,
-    height: 56,
+    width: 40,
+    height: 40,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Colors.bgTertiary,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
   },
   label: {
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '600',
-    textAlign: 'center',
+    color: Colors.textPrimary,
+    fontSize: 14,
+    fontFamily: 'DMSans_500Medium',
   },
 });
+
+// ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -83,7 +92,6 @@ export default function HomeScreen() {
 
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SCOREKEEPER';
 
-  // ─── Queries ─────────────────────────────────────────────────────────────
   const { data: events = [], isLoading: eventsLoading, error: eventsError, refetch: refetchEvents } = useEvents();
   const activeEvent = (events as Event[]).find(e => e.isActive) || (events as Event[])[0] || null;
 
@@ -99,8 +107,9 @@ export default function HomeScreen() {
   ).length;
 
   const top3 = (leaderboard as any[]).slice(0, 3);
+  const loading = eventsLoading;
 
-  // ─── Live pulse animation ─────────────────────────────────────────────────
+  // Live pulse animation
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
@@ -110,7 +119,6 @@ export default function HomeScreen() {
     ).start();
   }, []);
 
-  // ─── Pull-to-refresh ─────────────────────────────────────────────────────
   const [refreshing, setRefreshing] = React.useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -124,33 +132,35 @@ export default function HomeScreen() {
   }, [qc]);
 
   const scoreColor = (score: number) =>
-    score < 0 ? Colors.lime : score > 0 ? Colors.orange : Colors.textSecondary;
+    score < 0 ? Colors.gold : score > 0 ? Colors.warning : Colors.textSecondary;
 
   const formatScore = (score: number) =>
     score === 0 ? 'E' : score > 0 ? `+${score}` : `${score}`;
 
-  const loading = eventsLoading;
-
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: 100 }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.lime} />}
+        contentContainerStyle={[styles.scroll, { paddingBottom: 120 }]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.gold} />
+        }
         showsVerticalScrollIndicator={false}
       >
-        {/* Top Bar */}
+        {/* ── Top Bar ── */}
         <View style={styles.topBar}>
-          <View>
-            <Text style={styles.brandName}>THE CADDY</Text>
-          </View>
+          <Text style={styles.brandName}>THE CADDY</Text>
           <View style={styles.topBarRight}>
             {isAdmin && (
               <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/admin/index' as any)}>
-                <Settings size={20} color={Colors.lime} strokeWidth={2} />
+                <Ionicons name="settings-outline" size={20} color={Colors.gold} />
               </TouchableOpacity>
             )}
             <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/messages' as any)}>
-              <MessageCircle size={20} color={unreadMessages > 0 ? Colors.lime : Colors.textSecondary} strokeWidth={2} />
+              <Ionicons
+                name="chatbubble-outline"
+                size={20}
+                color={unreadMessages > 0 ? Colors.gold : Colors.textSecondary}
+              />
               {unreadMessages > 0 && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>{unreadMessages > 9 ? '9+' : unreadMessages}</Text>
@@ -158,7 +168,11 @@ export default function HomeScreen() {
               )}
             </TouchableOpacity>
             <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/notifications' as any)}>
-              <Bell size={20} color={unread > 0 ? Colors.lime : Colors.textSecondary} strokeWidth={2} />
+              <Ionicons
+                name="notifications-outline"
+                size={20}
+                color={unread > 0 ? Colors.gold : Colors.textSecondary}
+              />
               {unread > 0 && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>{unread > 9 ? '9+' : unread}</Text>
@@ -168,10 +182,10 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Quick Actions */}
-        <QuickActionsRow />
+        {/* ── Quick Actions ── */}
+        <QuickActionsGrid />
 
-        {/* Hero Event Card */}
+        {/* ── Hero Event Card ── */}
         {loading ? (
           <SkeletonCard />
         ) : eventsError ? (
@@ -196,17 +210,19 @@ export default function HomeScreen() {
             onPress={() => router.push(`/event/${activeEvent.id}` as any)}
             style={styles.heroWrap}
           >
-            <LinearGradient
-              colors={['#1A1A2E', '#0A0A0F']}
-              style={styles.heroCard}
-            >
-              {/* Glow accent */}
-              <View style={styles.heroGlowTop} />
+            <LinearGradient colors={['#1A2340', '#0F1420']} style={styles.heroCard}>
+              {/* Faint radial gold glow */}
+              <View style={styles.heroGoldGlow} />
 
               <View style={styles.heroBadgeRow}>
                 <View style={styles.typeBadge}>
                   <Text style={styles.typeBadgeText}>{activeEvent.type}</Text>
                 </View>
+                {(activeEvent as any).recurrence && (
+                  <View style={styles.recurrenceBadge}>
+                    <Text style={styles.recurrenceBadgeText}>{(activeEvent as any).recurrence}</Text>
+                  </View>
+                )}
                 <View style={styles.livePill}>
                   <Animated.View style={[styles.liveDot, { opacity: livePulse }]} />
                   <Text style={styles.liveText}>LIVE</Text>
@@ -216,10 +232,10 @@ export default function HomeScreen() {
               <Text style={styles.heroTitle}>{activeEvent.name}</Text>
 
               <View style={styles.heroMeta}>
-                <MapPin size={13} color={Colors.textSecondary} strokeWidth={2} />
+                <Ionicons name="location-outline" size={13} color={Colors.textSecondary} />
                 <Text style={styles.heroMetaText}>{activeEvent.location}</Text>
                 <Text style={styles.heroDot}>·</Text>
-                <Calendar size={13} color={Colors.textSecondary} strokeWidth={2} />
+                <Ionicons name="calendar-outline" size={13} color={Colors.textSecondary} />
                 <Text style={styles.heroMetaText}>
                   {new Date(activeEvent.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </Text>
@@ -229,141 +245,284 @@ export default function HomeScreen() {
                 style={styles.heroCta}
                 onPress={() => router.push('/(tabs)/leaderboard' as any)}
               >
-                <LinearGradient colors={['#C9F31D', '#7B61FF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.heroCtaGrad}>
-                  <Text style={styles.heroCtaText}>View Leaderboard</Text>
-                  <ArrowRight size={14} color={Colors.bg} strokeWidth={2.5} />
+                <LinearGradient
+                  colors={['#F0C866', '#C4912A']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.heroCtaGrad}
+                >
+                  <Text style={styles.heroCtaText}>View Leaderboard →</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </LinearGradient>
           </TouchableOpacity>
         )}
 
-        {/* Live Leaderboard Mini */}
+        {/* ── Leaderboard Podium ── */}
         {top3.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Top 3</Text>
+              <Text style={styles.sectionLabel}>LEADERBOARD</Text>
               <TouchableOpacity onPress={() => router.push('/(tabs)/leaderboard' as any)}>
                 <Text style={styles.seeAll}>See all →</Text>
               </TouchableOpacity>
             </View>
 
-            <View style={styles.podiumRow}>
-              {top3.map((entry: any, i: number) => {
-                const isPodiumFirst = i === 0;
-                return (
+            {/* #1 full-width */}
+            {top3[0] && (
+              <TouchableOpacity
+                style={styles.podiumFirst}
+                onPress={() => router.push(`/profile/${top3[0].user.id}` as any)}
+                activeOpacity={0.85}
+              >
+                <LinearGradient colors={['#1A2340', '#0F1420']} style={styles.podiumFirstInner}>
+                  <View style={styles.podiumFirstGlow} />
+                  <View style={styles.podiumFirstLeft}>
+                    <Text style={styles.rankGold}>1</Text>
+                    <AvatarRing uri={top3[0].user.avatar} name={top3[0].user.name} size={48} ring="lime" ringWidth={2} />
+                    <View>
+                      <Text style={styles.podiumFirstName}>{top3[0].user.name}</Text>
+                      {top3[0].user.handicap != null && (
+                        <Text style={styles.podiumHcp}>HCP {top3[0].user.handicap}</Text>
+                      )}
+                    </View>
+                  </View>
+                  <Text style={[styles.podiumFirstScore, { color: scoreColor(top3[0].netScore) }]}>
+                    {formatScore(top3[0].netScore)}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
+
+            {/* #2 + #3 side by side */}
+            {(top3[1] || top3[2]) && (
+              <View style={styles.podiumRow}>
+                {[top3[1], top3[2]].filter(Boolean).map((entry: any, i: number) => (
                   <TouchableOpacity
                     key={entry.user.id}
-                    style={[styles.podiumCard, isPodiumFirst && styles.podiumCardFirst]}
+                    style={styles.podiumCard}
                     onPress={() => router.push(`/profile/${entry.user.id}` as any)}
                     activeOpacity={0.8}
                   >
-                    <GlassCard glow={isPodiumFirst ? 'lime' : 'none'} padding={12} style={styles.podiumInner}>
-                      <Text style={[
-                        styles.podiumRank,
-                        isPodiumFirst && styles.podiumRankFirst,
-                        { color: i === 0 ? Colors.lime : i === 1 ? '#C0C0C0' : '#CD7F32' },
-                      ]}>
-                        {i + 1}
+                    <GlassCard padding={12} style={styles.podiumCardInner}>
+                      <Text style={[styles.podiumRank, { color: i === 0 ? '#C0C0C0' : '#CD7F32' }]}>
+                        {i + 2}
                       </Text>
-                      <AvatarRing
-                        uri={entry.user.avatar}
-                        name={entry.user.name}
-                        size={isPodiumFirst ? 44 : 36}
-                        ring={isPodiumFirst ? 'lime' : 'none'}
-                      />
-                      <Text style={styles.podiumName} numberOfLines={1}>
-                        {entry.user.name.split(' ')[0]}
-                      </Text>
+                      <AvatarRing uri={entry.user.avatar} name={entry.user.name} size={36} />
+                      <Text style={styles.podiumName} numberOfLines={1}>{entry.user.name.split(' ')[0]}</Text>
                       <Text style={[styles.podiumScore, { color: scoreColor(entry.netScore) }]}>
                         {formatScore(entry.netScore)}
                       </Text>
                     </GlassCard>
                   </TouchableOpacity>
-                );
-              })}
-            </View>
+                ))}
+              </View>
+            )}
           </View>
         )}
-
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen:       { flex: 1, backgroundColor: Colors.bg },
-  scroll:       { paddingHorizontal: Spacing.md },
+  screen: { flex: 1, backgroundColor: Colors.bg },
+  scroll: { paddingHorizontal: Spacing.md },
 
   // Top bar
-  topBar:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16 },
-  brandName:    { color: Colors.lime, fontSize: 16, fontWeight: '900', letterSpacing: 4 },
-  topBarRight:  { flexDirection: 'row', gap: 8 },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+  },
+  brandName: {
+    color: Colors.gold,
+    fontSize: 20,
+    fontFamily: 'CormorantGaramond_700Bold',
+    letterSpacing: 3,
+  },
+  topBarRight: { flexDirection: 'row', gap: 8 },
   iconBtn: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: Colors.bgSecondary, borderWidth: 1, borderColor: Colors.cardBorder,
-    alignItems: 'center', justifyContent: 'center', position: 'relative',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.bgSecondary,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
   },
   badge: {
-    position: 'absolute', top: -2, right: -2,
-    minWidth: 16, height: 16, borderRadius: 8,
-    backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: 3, borderWidth: 1.5, borderColor: Colors.bg,
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: Colors.bg,
   },
   badgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
 
   // Hero
-  heroWrap:   { marginBottom: 24 },
-  heroCard:   {
-    borderRadius: Radius.xl, padding: 20,
-    borderWidth: 1, borderColor: Colors.glassBorder, overflow: 'hidden',
+  heroWrap: { marginBottom: 24 },
+  heroCard: {
+    borderRadius: Radius.xl,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
   },
-  heroGlowTop: {
-    position: 'absolute', top: -40, right: -40,
-    width: 160, height: 160, borderRadius: 80,
-    backgroundColor: Colors.lime, opacity: 0.06,
+  heroGoldGlow: {
+    position: 'absolute',
+    top: -50,
+    right: -50,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: Colors.gold,
+    opacity: 0.05,
   },
   heroBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
-  typeBadge:    {
-    backgroundColor: Colors.limeDim, borderRadius: Radius.pill,
-    paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: Colors.lime + '40',
+  typeBadge: {
+    backgroundColor: Colors.goldDim,
+    borderRadius: Radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: Colors.gold + '40',
   },
-  typeBadgeText: { color: Colors.lime, fontSize: 10, fontWeight: '700', letterSpacing: 1 },
-  livePill:     { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Colors.error + '22', borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 4 },
-  liveDot:      { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.error },
-  liveText:     { color: Colors.error, fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
-  heroTitle:    { color: Colors.textPrimary, fontSize: 22, fontWeight: '800', letterSpacing: -0.5, marginBottom: 10 },
-  heroMeta:     { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 16 },
-  heroMetaText: { color: Colors.textSecondary, fontSize: 13 },
-  heroDot:      { color: Colors.textMuted, marginHorizontal: 2 },
-  heroCta:      { alignSelf: 'flex-start', borderRadius: Radius.pill, overflow: 'hidden' },
-  heroCtaGrad:  { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 10 },
-  heroCtaText:  { color: Colors.bg, fontWeight: '700', fontSize: 13 },
+  typeBadgeText: {
+    color: Colors.gold,
+    fontSize: 10,
+    fontFamily: 'DMSans_500Medium',
+    letterSpacing: 1,
+  },
+  recurrenceBadge: {
+    backgroundColor: Colors.tealDim,
+    borderRadius: Radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: Colors.teal + '40',
+  },
+  recurrenceBadgeText: {
+    color: Colors.teal,
+    fontSize: 10,
+    fontFamily: 'DMSans_500Medium',
+    letterSpacing: 1,
+  },
+  livePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: Colors.error + '22',
+    borderRadius: Radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.error },
+  liveText: { color: Colors.error, fontSize: 10, fontFamily: 'DMSans_500Medium', letterSpacing: 0.5 },
+  heroTitle: {
+    color: Colors.textPrimary,
+    fontSize: 26,
+    fontFamily: 'CormorantGaramond_700Bold',
+    marginBottom: 10,
+  },
+  heroMeta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 16 },
+  heroMetaText: { color: Colors.textSecondary, fontSize: 13, fontFamily: 'DMSans_400Regular' },
+  heroDot: { color: Colors.textMuted, marginHorizontal: 2 },
+  heroCta: { alignSelf: 'flex-start', borderRadius: Radius.pill, overflow: 'hidden' },
+  heroCtaGrad: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  heroCtaText: { color: Colors.bg, fontFamily: 'DMSans_500Medium', fontSize: 13 },
 
-  // No event / error
+  // No event
   noEventCard: { marginBottom: 24, alignItems: 'center', gap: 12 },
-  noEventText: { color: Colors.textSecondary, fontSize: 14, textAlign: 'center', paddingVertical: 8 },
-  retryBtn: {
-    backgroundColor: Colors.limeDim, borderRadius: Radius.pill,
-    paddingHorizontal: 20, paddingVertical: 8,
-    borderWidth: 1, borderColor: Colors.lime + '40',
+  noEventText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    textAlign: 'center',
+    paddingVertical: 8,
+    fontFamily: 'DMSans_400Regular',
   },
-  retryText: { color: Colors.lime, fontSize: 13, fontWeight: '700' },
+  retryBtn: {
+    backgroundColor: Colors.goldDim,
+    borderRadius: Radius.pill,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: Colors.gold + '40',
+  },
+  retryText: { color: Colors.gold, fontSize: 13, fontFamily: 'DMSans_500Medium' },
 
   // Section
-  section:       { marginBottom: 24 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sectionTitle:  { color: Colors.textPrimary, fontSize: 17, fontWeight: '700' },
-  seeAll:        { color: Colors.lime, fontSize: 13 },
+  section: { marginBottom: 24 },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sectionLabel: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    fontFamily: 'DMSans_500Medium',
+    letterSpacing: 1.5,
+  },
+  seeAll: { color: Colors.gold, fontSize: 13, fontFamily: 'DMSans_400Regular' },
 
   // Podium
-  podiumRow:       { flexDirection: 'row', gap: 10 },
-  podiumCard:      { flex: 1 },
-  podiumCardFirst: { flex: 1.2 },
-  podiumInner:     { alignItems: 'center', gap: 6 },
-  podiumRank:      { fontSize: 18 },
-  podiumRankFirst: { fontSize: 22 },
-  podiumName:      { color: Colors.textPrimary, fontSize: 12, fontWeight: '600', textAlign: 'center' },
-  podiumScore:     { fontSize: 18, fontWeight: '800', letterSpacing: -0.5 },
-
+  podiumFirst: { marginBottom: 10 },
+  podiumFirstInner: {
+    borderRadius: Radius.xl,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: Colors.borderStrong,
+    overflow: 'hidden',
+  },
+  podiumFirstGlow: {
+    position: 'absolute',
+    top: -30,
+    left: -30,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: Colors.gold,
+    opacity: 0.07,
+  },
+  podiumFirstLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  rankGold: {
+    color: Colors.gold,
+    fontSize: 22,
+    fontFamily: 'DMMono_400Regular',
+  },
+  podiumFirstName: {
+    color: Colors.textPrimary,
+    fontSize: 16,
+    fontFamily: 'DMSans_500Medium',
+  },
+  podiumHcp: { color: Colors.textSecondary, fontSize: 12, fontFamily: 'DMSans_400Regular', marginTop: 2 },
+  podiumFirstScore: {
+    fontSize: 32,
+    fontFamily: 'DMMono_400Regular',
+    letterSpacing: -1,
+  },
+  podiumRow: { flexDirection: 'row', gap: 10 },
+  podiumCard: { flex: 1 },
+  podiumCardInner: { alignItems: 'center', gap: 6 },
+  podiumRank: { fontSize: 18, fontFamily: 'DMMono_400Regular', textAlign: 'center' },
+  podiumName: { color: Colors.textPrimary, fontSize: 12, fontFamily: 'DMSans_500Medium', textAlign: 'center' },
+  podiumScore: { fontSize: 20, fontFamily: 'DMMono_400Regular', letterSpacing: -0.5 },
 });

@@ -326,7 +326,7 @@ export default function EventDetailScreen() {
         winningScore: histForm.winningScore ? Number(histForm.winningScore) : undefined,
         coursePlayed: histForm.coursePlayed || undefined,
         recap: histForm.recap || undefined,
-      });
+      }) as any;
       // Upload photos if any
       if (historyPhotos.length > 0 && newEntry?.id) {
         for (const photoUri of historyPhotos) {
@@ -506,7 +506,7 @@ export default function EventDetailScreen() {
     );
   }
 
-  const statusColors = statusBadgeColors(event.status);
+  const statusColors = statusBadgeColors(event.status ?? 'UPCOMING');
   const days = [...new Set(itinerary.map((i: any) => i.day as number))].sort() as number[];
   const allDays = days.length > 0 ? days : [1];
   const nextStatus = STATUS_EVENT_FLOW[STATUS_EVENT_FLOW.indexOf(event.status as any) + 1];
@@ -575,8 +575,8 @@ export default function EventDetailScreen() {
       </View>
 
       {/* Participants stack */}
-      {(event.participants?.length > 0 || participants.length > 0) && (() => {
-        const pList = event.participants?.length > 0 ? event.participants : participants;
+      {((event.participants?.length ?? 0) > 0 || participants.length > 0) && (() => {
+        const pList = (event.participants?.length ?? 0) > 0 ? event.participants! : participants;
         return (
           <View style={styles.avatarRow}>
             {pList.slice(0, 5).map((p: any, i: number) => (

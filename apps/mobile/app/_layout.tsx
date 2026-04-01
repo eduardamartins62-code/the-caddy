@@ -54,6 +54,9 @@ function RootLayoutNav() {
       <Stack.Screen name="messages/[userId]" />
       <Stack.Screen name="friends" />
       <Stack.Screen name="onboarding" />
+      <Stack.Screen name="course/[id]" />
+      <Stack.Screen name="privacy" />
+      <Stack.Screen name="terms" />
     </Stack>
   );
 }

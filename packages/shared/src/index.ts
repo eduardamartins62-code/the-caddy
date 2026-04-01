@@ -12,9 +12,11 @@ export interface User {
   email: string;
   phone?: string | null;
   name: string;
+  username?: string | null;
   avatar: string | null;
   bio: string | null;
   handicap: number | null;
+  handicapIndex?: number | null;
   homeCourse: string | null;
   location?: string | null;
   role: UserRole;
@@ -61,7 +63,13 @@ export interface Event {
   courseId: string | null;
   createdBy: string;
   isActive: boolean;
+  status?: string | null;
+  description?: string | null;
+  host?: User | null;
+  recurrence?: string | null;
   participants?: EventParticipant[];
+  rounds?: Round[];
+  _count?: { rounds?: number; participants?: number; [key: string]: number | undefined };
 }
 
 export interface EventParticipant {
@@ -82,6 +90,14 @@ export interface Round {
   coursePhoto: string | null;
   date: string;
   isComplete: boolean;
+  status?: string | null;
+  roundNumber?: number | null;
+  coursePar?: number | null;
+  courseRating?: number | null;
+  courseSlope?: number | null;
+  format?: string | null;
+  event?: { id: string; name: string } | null;
+  participants?: any[];
   holes?: RoundHole[];
 }
 

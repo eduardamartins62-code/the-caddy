@@ -97,12 +97,12 @@ export default function CreateScreen() {
               >
                 {active ? (
                   <LinearGradient colors={['#C9F31D', '#7B61FF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.typeGrad}>
-                    <type.Icon size={16} color={Colors.bg} strokeWidth={2.5} />
+                    <type.Icon size={16} stroke={Colors.bg} strokeWidth={2.5} />
                     <Text style={[styles.typeLabel, { color: Colors.bg }]}>{type.label}</Text>
                   </LinearGradient>
                 ) : (
                   <View style={styles.typeInner}>
-                    <type.Icon size={16} color={Colors.textSecondary} strokeWidth={2} />
+                    <type.Icon size={16} stroke={Colors.textSecondary} strokeWidth={2} />
                     <Text style={styles.typeLabel}>{type.label}</Text>
                   </View>
                 )}
@@ -116,13 +116,13 @@ export default function CreateScreen() {
           <View style={styles.mediaWrap}>
             <Image source={{ uri: mediaUri }} style={styles.mediaImg} resizeMode="cover" />
             <TouchableOpacity style={styles.removeMedia} onPress={() => setMediaUri(null)}>
-              <CircleX size={28} color={Colors.error} strokeWidth={2} />
+              <CircleX size={28} stroke={Colors.error} strokeWidth={2} />
             </TouchableOpacity>
           </View>
         ) : (
           <TouchableOpacity style={styles.mediaPicker} onPress={pickMedia} activeOpacity={0.75}>
             <View style={styles.mediaPickerIcon}>
-              <ImageIcon size={28} color={Colors.textMuted} strokeWidth={1.5} />
+              <ImageIcon size={28} stroke={Colors.textMuted} strokeWidth={1.5} />
             </View>
             <Text style={styles.mediaPickerTitle}>Add photo or video</Text>
             <Text style={styles.mediaPickerSub}>Tap to choose from your library</Text>
@@ -147,7 +147,7 @@ export default function CreateScreen() {
         <View style={styles.tagsSection}>
           <View style={styles.tagInputRow}>
             <View style={[styles.tagIcon, { backgroundColor: Colors.limeDim }]}>
-              <Flag size={14} color={Colors.lime} strokeWidth={2} />
+              <Flag size={14} stroke={Colors.lime} strokeWidth={2} />
             </View>
             <TextInput
               style={styles.tagInput}
@@ -159,7 +159,7 @@ export default function CreateScreen() {
           </View>
           <View style={styles.tagInputRow}>
             <View style={[styles.tagIcon, { backgroundColor: Colors.purpleDim }]}>
-              <MapPin size={14} color={Colors.purple} strokeWidth={2} />
+              <MapPin size={14} stroke={Colors.purple} strokeWidth={2} />
             </View>
             <TextInput
               style={styles.tagInput}

@@ -455,40 +455,57 @@ function PostCard({
 }
 
 const pcStyles = StyleSheet.create({
-  card:        { marginBottom: 12 },
+  card: {
+    marginBottom: 12,
+    backgroundColor: Colors.bgSecondary,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(212,168,67,0.10)',
+    padding: 14,
+  },
   authorRow:   { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   authorLeft:  { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  authorName:  { color: Colors.textPrimary, fontSize: 14, fontWeight: '700' },
+  authorName:  { color: Colors.textPrimary, fontSize: 14, fontFamily: 'DMSans_500Medium' },
   metaRow:     { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginTop: 2 },
-  username:    { color: Colors.textMuted, fontSize: 11 },
-  courseTag:   { color: Colors.lime, fontSize: 11, marginLeft: 4 },
-  timeAgo:     { color: Colors.textSecondary, fontSize: 11 },
+  username:    { color: Colors.textMuted, fontSize: 11, fontFamily: 'DMSans_400Regular' },
+  courseTag:   {
+    color: Colors.gold,
+    fontSize: 11,
+    fontFamily: 'DMSans_400Regular',
+    marginLeft: 4,
+    backgroundColor: Colors.bgTertiary,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.pill,
+  },
+  timeAgo:     { color: Colors.textSecondary, fontSize: 11, fontFamily: 'DMSans_400Regular' },
   followBtn: {
-    borderWidth: 1, borderColor: Colors.lime, borderRadius: Radius.pill,
+    borderWidth: 1, borderColor: Colors.gold, borderRadius: Radius.pill,
     paddingHorizontal: 12, paddingVertical: 5,
+    backgroundColor: Colors.goldDim,
   },
-  followBtnText: { color: Colors.lime, fontSize: 12, fontWeight: '600' },
+  followBtnText: { color: Colors.gold, fontSize: 12, fontFamily: 'DMSans_500Medium' },
   postImage: {
-    width: '100%', height: 240, borderRadius: Radius.md, marginBottom: 10,
+    width: '100%', height: 240, borderRadius: Radius.lg, marginBottom: 10,
   },
-  content:         { color: Colors.textPrimary, fontSize: 14, lineHeight: 20, marginBottom: 8 },
-  authorNameInline: { fontWeight: '700' },
+  content:         { color: Colors.textPrimary, fontSize: 14, lineHeight: 20, marginBottom: 8, fontFamily: 'DMSans_400Regular' },
+  authorNameInline: { fontFamily: 'DMSans_500Medium' },
   locationRow:     { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
-  locationText:    { color: Colors.textMuted, fontSize: 11 },
+  locationText:    { color: Colors.textMuted, fontSize: 11, fontFamily: 'DMSans_400Regular' },
   actions: {
     flexDirection: 'row',
     paddingTop: 10,
     marginTop: 4,
     borderTopWidth: 1,
-    borderTopColor: Colors.cardBorder + '60',
+    borderTopColor: Colors.border,
     gap: 0,
   },
   actionBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     flex: 1, justifyContent: 'center', paddingVertical: 4,
   },
-  actionLabel: { color: Colors.textSecondary, fontSize: 12, fontWeight: '600' },
-  actionLabelLiked: { color: Colors.lime },
+  actionLabel: { color: Colors.textSecondary, fontSize: 12, fontFamily: 'DMSans_400Regular' },
+  actionLabelLiked: { color: Colors.gold, fontFamily: 'DMSans_500Medium' },
 });
 
 // ─── Suggestions row ──────────────────────────────────────────────────────────
@@ -929,9 +946,9 @@ export default function SocialScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.screenHeader}>
-        <Text style={styles.screenTitle}>Social</Text>
+        <Text style={styles.screenTitle}>THE CADDY</Text>
         <TouchableOpacity style={styles.composeBtn} onPress={() => setShowCompose(true)}>
-          <Ionicons name="create-outline" size={22} color={Colors.lime} />
+          <Ionicons name="create-outline" size={22} color={Colors.gold} />
         </TouchableOpacity>
       </View>
 
@@ -942,7 +959,7 @@ export default function SocialScreen() {
         contentContainerStyle={[styles.feed, { paddingBottom: 120 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.lime} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.gold} />
         }
         ListHeaderComponent={listHeader}
         ListEmptyComponent={listEmpty}
@@ -989,35 +1006,44 @@ const styles = StyleSheet.create({
 
   screenHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: Colors.cardBorder,
+    paddingHorizontal: Spacing.md, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
-  screenTitle: { color: Colors.textPrimary, fontSize: 20, fontWeight: '900' },
+  screenTitle: {
+    color: Colors.gold,
+    fontSize: 20,
+    fontFamily: 'CormorantGaramond_700Bold',
+    letterSpacing: 3,
+  },
   composeBtn: {
     width: 38, height: 38, borderRadius: 19,
-    backgroundColor: Colors.limeDim, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: Colors.goldDim,
+    borderWidth: 1, borderColor: Colors.gold + '40',
+    alignItems: 'center', justifyContent: 'center',
   },
 
   tabToggleRow: { paddingHorizontal: Spacing.md, paddingVertical: 12 },
   tabToggle: {
-    flexDirection: 'row', backgroundColor: Colors.bgSecondary,
+    flexDirection: 'row',
+    backgroundColor: Colors.bgTertiary,
     borderRadius: Radius.pill, padding: 3,
-    borderWidth: 1, borderColor: Colors.cardBorder,
+    borderWidth: 1, borderColor: Colors.border,
     alignSelf: 'stretch',
   },
-  tabToggleBtn:         { flex: 1, paddingVertical: 8, borderRadius: Radius.pill, alignItems: 'center' },
-  tabToggleBtnActive:   { backgroundColor: Colors.limeDim, borderWidth: 1, borderColor: Colors.lime + '50' },
-  tabToggleLabel:       { color: Colors.textSecondary, fontSize: 14, fontWeight: '600' },
-  tabToggleLabelActive: { color: Colors.lime },
+  tabToggleBtn: { flex: 1, paddingVertical: 8, borderRadius: Radius.pill, alignItems: 'center', position: 'relative' },
+  tabToggleBtnActive: { backgroundColor: Colors.goldDim, borderWidth: 1, borderColor: Colors.gold + '40' },
+  tabToggleLabel: { color: Colors.textMuted, fontSize: 13, fontFamily: 'DMSans_500Medium' },
+  tabToggleLabelActive: { color: Colors.gold },
 
   feed: { paddingHorizontal: Spacing.md },
 
   emptyState: {
     alignItems: 'center', paddingTop: 60, gap: 10, paddingBottom: 40,
   },
-  emptyText: { color: Colors.textSecondary, fontSize: 16, fontWeight: '600' },
+  emptyText: { color: Colors.textSecondary, fontSize: 16, fontFamily: 'DMSans_500Medium' },
   emptySub: {
     color: Colors.textMuted, fontSize: 13, textAlign: 'center', paddingHorizontal: 40,
+    fontFamily: 'DMSans_400Regular',
   },
 
   loadMoreRow: { paddingVertical: 20, alignItems: 'center' },

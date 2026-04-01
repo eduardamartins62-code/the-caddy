@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Tabs, useRouter } from 'expo-router';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  House, Compass, Trophy, User, Flag,
-} from 'lucide-react-native';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/theme';
 import { roundsApi } from '../../services/api';
@@ -14,6 +13,7 @@ import { roundsApi } from '../../services/api';
 function ActiveRoundBar() {
   const [activeRound, setActiveRound] = useState<any>(null);
   const router = useRouter();
+  const pulse = React.useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     const check = async () => {
@@ -27,6 +27,16 @@ function ActiveRoundBar() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    if (!activeRound) return;
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.3, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [activeRound]);
+
   if (!activeRound) return null;
 
   return (
@@ -35,18 +45,18 @@ function ActiveRoundBar() {
       onPress={() => router.push(`/round/${activeRound.round.id}` as any)}
       activeOpacity={0.9}
     >
-      <View style={activeRoundBarStyles.info}>
-        <Text style={activeRoundBarStyles.label}>Thru {activeRound.holesPlayed}</Text>
+      <View style={activeRoundBarStyles.left}>
+        <Animated.View style={[activeRoundBarStyles.liveDot, { opacity: pulse }]} />
+        <Text style={activeRoundBarStyles.liveText}>LIVE</Text>
         <Text style={activeRoundBarStyles.label}>
-          To Par {activeRound.toPar >= 0 ? '+' : ''}{activeRound.toPar}
+          Thru {activeRound.holesPlayed} · {activeRound.toPar >= 0 ? '+' : ''}{activeRound.toPar} · Gross {activeRound.gross}
         </Text>
-        <Text style={activeRoundBarStyles.label}>Gross {activeRound.gross}</Text>
       </View>
       <TouchableOpacity
-        style={activeRoundBarStyles.finishBtn}
+        style={activeRoundBarStyles.scoreBtn}
         onPress={() => router.push(`/round/${activeRound.round.id}` as any)}
       >
-        <Text style={activeRoundBarStyles.finishText}>Finish Round</Text>
+        <Text style={activeRoundBarStyles.scoreBtnText}>Score →</Text>
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -57,45 +67,67 @@ const activeRoundBarStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#1A1A2E',
+    backgroundColor: Colors.bgSecondary,
     borderTopWidth: 1,
-    borderTopColor: '#C9F31D33',
+    borderTopColor: Colors.border,
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
-  info: { flexDirection: 'row', gap: 20 },
-  label: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
-  finishBtn: {
-    backgroundColor: '#C9F31D',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  left: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: Colors.gold,
   },
-  finishText: { color: '#0A0A0F', fontSize: 13, fontWeight: '700' },
+  liveText: {
+    color: Colors.gold,
+    fontSize: 10,
+    fontFamily: 'DMSans_500Medium',
+    letterSpacing: 1.5,
+  },
+  label: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+  },
+  scoreBtn: {
+    backgroundColor: Colors.goldDim,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: Colors.gold + '50',
+  },
+  scoreBtnText: {
+    color: Colors.gold,
+    fontSize: 12,
+    fontFamily: 'DMSans_500Medium',
+  },
 });
 
-// ─── Tab config ──────────────────────────────────────────────────────────────
+// ─── Tab definitions ──────────────────────────────────────────────────────────
 
-type TabConfig = {
+type TabDef = {
   name: string;
   label: string;
-  Icon: React.ComponentType<{ size: number; color: string; strokeWidth?: number }>;
+  icon: string;
+  iconFocused: string;
   isCreate?: boolean;
 };
 
-const TABS: TabConfig[] = [
-  { name: 'home',        label: 'Home',    Icon: House },
-  { name: 'social',      label: 'Explore', Icon: Compass },
-  { name: 'create',      label: '',        Icon: House, isCreate: true },
-  { name: 'courses',     label: 'Courses', Icon: Flag },
-  { name: 'leaderboard', label: 'Leader',  Icon: Trophy },
-  { name: 'profile',     label: 'Profile', Icon: User },
+const TABS: TabDef[] = [
+  { name: 'home',     label: 'HOME',    icon: 'home-outline',   iconFocused: 'home' },
+  { name: 'social',   label: 'SOCIAL',  icon: 'people-outline', iconFocused: 'people' },
+  { name: 'create',   label: '',        icon: 'add',            iconFocused: 'add', isCreate: true },
+  { name: 'courses',  label: 'COURSES', icon: 'flag-outline',   iconFocused: 'flag' },
+  { name: 'profile',  label: 'PROFILE', icon: 'person-outline', iconFocused: 'person' },
 ];
 
-// ─── Bar height constant ──────────────────────────────────────────────────────
+// ─── Bar constants ────────────────────────────────────────────────────────────
 
-const BAR_HEIGHT = 68;
-const CREATE_SIZE = 54;
+const BAR_HEIGHT = 72;
+const CREATE_SIZE = 52;
 
 // ─── Custom Tab Bar ──────────────────────────────────────────────────────────
 
@@ -106,17 +138,23 @@ function CustomTabBar({ state, navigation }: any) {
 
   return (
     <View
-      style={[
-        styles.outerWrapper,
-        { paddingBottom: bottomPad, height: BAR_HEIGHT + bottomPad },
-      ]}
+      style={[tabBarStyles.outerWrapper, { paddingBottom: bottomPad, height: BAR_HEIGHT + bottomPad }]}
       pointerEvents="box-none"
     >
-      <View style={styles.bar}>
+      {/* Gold top border line */}
+      <View style={tabBarStyles.topBorder} />
+
+      <BlurView intensity={60} tint="dark" style={StyleSheet.absoluteFill} />
+
+      <View style={tabBarStyles.row} pointerEvents="box-none">
         {TABS.map((tab, index) => {
           const focused = state.index === index;
 
           const onPress = () => {
+            if (tab.isCreate) {
+              router.push('/event/create' as any);
+              return;
+            }
             const route = state.routes[index];
             if (!route) return;
             const event = navigation.emit({
@@ -129,50 +167,50 @@ function CustomTabBar({ state, navigation }: any) {
             }
           };
 
-          // ── Create / Start Game button (center) ────────────────────────────
+          // ── Create button (gold gradient circle) ──────────────────────────
           if (tab.isCreate) {
             return (
               <TouchableOpacity
                 key={tab.name}
-                onPress={() => router.push('/event/create' as any)}
+                onPress={onPress}
                 activeOpacity={0.8}
-                style={styles.createWrap}
+                style={tabBarStyles.createWrap}
               >
-                <View style={styles.createCircle}>
-                  <Ionicons name="golf-outline" size={26} color={Colors.bg} />
-                </View>
+                <LinearGradient
+                  colors={['#F0C866', '#C4912A']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={tabBarStyles.createCircle}
+                >
+                  <Ionicons name="add" size={28} color={Colors.bg} />
+                </LinearGradient>
               </TouchableOpacity>
             );
           }
 
-          // ── Regular tab ────────────────────────────────────────────────────
-          const iconColor = focused ? Colors.lime : Colors.textSecondary;
+          // ── Regular tab ───────────────────────────────────────────────────
+          const iconColor = focused ? Colors.gold : Colors.textMuted;
 
           return (
             <TouchableOpacity
               key={tab.name}
               onPress={onPress}
               activeOpacity={0.7}
-              style={styles.tab}
+              style={tabBarStyles.tab}
             >
-              {/* Lime glow dot above icon when active */}
-              {focused && <View style={styles.glowDot} />}
+              {focused && <View style={tabBarStyles.activeUnderline} />}
 
-              <tab.Icon
-                size={21}
+              <Ionicons
+                name={(focused ? tab.iconFocused : tab.icon) as any}
+                size={22}
                 color={iconColor}
-                strokeWidth={focused ? 2.2 : 1.7}
               />
 
-              <Text
-                style={[
-                  styles.label,
-                  { color: iconColor, fontWeight: focused ? '700' : '400' },
-                ]}
-                numberOfLines={1}
-              >
-                {tab.label}
-              </Text>
+              {tab.label ? (
+                <Text style={[tabBarStyles.label, { color: iconColor }]} numberOfLines={1}>
+                  {tab.label}
+                </Text>
+              ) : null}
             </TouchableOpacity>
           );
         })}
@@ -186,93 +224,81 @@ function CustomTabBar({ state, navigation }: any) {
 export default function TabsLayout() {
   return (
     <View style={{ flex: 1 }}>
+      <ActiveRoundBar />
       <Tabs
         tabBar={(props) => <CustomTabBar {...props} />}
         screenOptions={{ headerShown: false }}
       >
-        <Tabs.Screen name="home" />
-        <Tabs.Screen name="social" />
-        <Tabs.Screen name="create" />
-        <Tabs.Screen name="courses" />
-        <Tabs.Screen name="leaderboard" />
-        <Tabs.Screen name="profile" />
-        {/* Hidden legacy screens — still routable, not shown in nav */}
+        <Tabs.Screen name="home"        options={{ title: 'Home' }} />
+        <Tabs.Screen name="social"      options={{ title: 'Social' }} />
+        <Tabs.Screen name="create"      options={{ title: '' }} />
+        <Tabs.Screen name="courses"     options={{ title: 'Courses' }} />
+        <Tabs.Screen name="leaderboard" options={{ title: 'Leaderboard' }} />
+        <Tabs.Screen name="profile"     options={{ title: 'Profile' }} />
+        {/* Hidden legacy screens */}
         <Tabs.Screen name="more"      options={{ href: null }} />
         <Tabs.Screen name="schedule"  options={{ href: null }} />
         <Tabs.Screen name="itinerary" options={{ href: null }} />
         <Tabs.Screen name="history"   options={{ href: null }} />
       </Tabs>
-      <ActiveRoundBar />
     </View>
   );
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const tabBarStyles = StyleSheet.create({
   outerWrapper: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'transparent',
-    paddingHorizontal: 12,
-    justifyContent: 'flex-end',
+    overflow: 'hidden',
   },
-  bar: {
+  topBorder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(212,168,67,0.20)',
+    zIndex: 1,
+  },
+  row: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    height: BAR_HEIGHT,
-    backgroundColor: '#13131A',
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: 4,
-    // Shadow
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.55,
-        shadowRadius: 18,
-      },
-      android: { elevation: 20 },
-    }),
+    paddingHorizontal: 8,
   },
-
-  // ── Regular tab
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    gap: 4,
+    paddingTop: 10,
+    gap: 3,
     position: 'relative',
   },
-  glowDot: {
+  activeUnderline: {
     position: 'absolute',
-    top: 4,
-    width: 20,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: Colors.lime,
-    // glow
+    top: 0,
+    width: 24,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: Colors.gold,
     ...Platform.select({
       ios: {
-        shadowColor: Colors.lime,
+        shadowColor: Colors.gold,
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.9,
-        shadowRadius: 6,
+        shadowOpacity: 0.8,
+        shadowRadius: 4,
       },
-      android: { elevation: 0 },
     }),
   },
   label: {
     fontSize: 10,
-    letterSpacing: 0.1,
+    fontFamily: 'DMSans_500Medium',
+    letterSpacing: 1,
   },
-
-  // ── Create button
   createWrap: {
     flex: 1,
     alignItems: 'center',
@@ -282,16 +308,14 @@ const styles = StyleSheet.create({
     width: CREATE_SIZE,
     height: CREATE_SIZE,
     borderRadius: CREATE_SIZE / 2,
-    backgroundColor: Colors.lime,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -14, // elevate above bar
-    // Glow
+    marginTop: -14,
     ...Platform.select({
       ios: {
-        shadowColor: Colors.lime,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.7,
+        shadowColor: Colors.gold,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.6,
         shadowRadius: 12,
       },
       android: { elevation: 12 },

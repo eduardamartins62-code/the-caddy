@@ -73,14 +73,14 @@ export default function LeaderboardTab() {
   ).map((e, i) => ({ ...e, displayRank: i + 1 }));
 
   const scoreColor = (score: number) =>
-    score < 0 ? Colors.lime : score > 0 ? Colors.orange : Colors.textSecondary;
+    score < 0 ? Colors.gold : score > 0 ? Colors.warning : Colors.textSecondary;
 
   const formatScore = (score: number) =>
     score === 0 ? 'E' : score > 0 ? `+${score}` : `${score}`;
 
   const posIcon = (change: string) => {
-    if (change === 'up') return <ChevronUp size={12} color={Colors.lime} strokeWidth={2.5} />;
-    if (change === 'down') return <ChevronDown size={12} color={Colors.orange} strokeWidth={2.5} />;
+    if (change === 'up') return <ChevronUp size={12} stroke={Colors.lime} strokeWidth={2.5} />;
+    if (change === 'down') return <ChevronDown size={12} stroke={Colors.orange} strokeWidth={2.5} />;
     return <View style={{ width: 12 }} />;
   };
 
@@ -91,7 +91,7 @@ export default function LeaderboardTab() {
       {/* Top bar */}
       <View style={styles.topBar}>
         <View style={{ flex: 1, marginRight: 12 }}>
-          <Text style={styles.pageTitle}>Leaderboard</Text>
+          <Text style={styles.pageTitle}>LEADERBOARD</Text>
           {/* Event selector */}
           {eventList.length > 1 ? (
             <TouchableOpacity
@@ -101,7 +101,7 @@ export default function LeaderboardTab() {
               <Text style={styles.eventName} numberOfLines={1}>
                 {selectedEvent?.name ?? 'Select event'}
               </Text>
-              <ChevronDownIcon size={14} color={Colors.textSecondary} strokeWidth={2} />
+              <ChevronDownIcon size={14} stroke={Colors.textSecondary} strokeWidth={2} />
             </TouchableOpacity>
           ) : selectedEvent ? (
             <Text style={styles.eventName} numberOfLines={1}>{selectedEvent.name}</Text>
@@ -153,7 +153,7 @@ export default function LeaderboardTab() {
           </View>
         ) : lbError ? (
           <View style={styles.emptyState}>
-            <AlertCircle size={40} color={Colors.error} strokeWidth={1.5} />
+            <AlertCircle size={40} stroke={Colors.error} strokeWidth={1.5} />
             <Text style={styles.emptyTitle}>Failed to load leaderboard</Text>
             <TouchableOpacity onPress={() => refetchLb()} style={styles.retryBtn}>
               <Text style={styles.retryText}>Try Again</Text>
@@ -161,7 +161,7 @@ export default function LeaderboardTab() {
           </View>
         ) : sorted.length === 0 ? (
           <View style={styles.emptyState}>
-            <Trophy size={40} color={Colors.textMuted} strokeWidth={1.5} />
+            <Trophy size={40} stroke={Colors.textMuted} strokeWidth={1.5} />
             <Text style={styles.emptyTitle}>No scores yet</Text>
             <Text style={styles.emptySub}>Scores will appear here once the round starts.</Text>
           </View>
@@ -179,7 +179,7 @@ export default function LeaderboardTab() {
                   <LinearGradient colors={['#1A1A2E', '#0F0F1A']} style={styles.firstCardInner}>
                     <View style={styles.firstGlow} />
                     <View style={styles.firstLeft}>
-                      <Trophy size={28} color={Colors.lime} strokeWidth={1.8} />
+                      <Trophy size={28} stroke={Colors.lime} strokeWidth={1.8} />
                       <AvatarRing
                         uri={top1.user.avatar}
                         name={top1.user.name}
@@ -282,38 +282,43 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
 
   topBar:    { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingVertical: 16 },
-  pageTitle: { color: Colors.textPrimary, fontSize: 22, fontWeight: '800' },
-  eventName: { color: Colors.textSecondary, fontSize: 13, marginTop: 2 },
+  pageTitle: {
+    color: Colors.gold,
+    fontSize: 22,
+    fontFamily: 'CormorantGaramond_700Bold',
+    letterSpacing: 2,
+  },
+  eventName: { color: Colors.textSecondary, fontSize: 13, marginTop: 2, fontFamily: 'DMSans_400Regular' },
   eventPicker: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
 
   dropdown: { marginHorizontal: Spacing.md, marginBottom: 8, zIndex: 10 },
   dropdownItem: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: Radius.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  dropdownItemActive: { backgroundColor: Colors.limeDim },
-  dropdownText: { color: Colors.textSecondary, fontSize: 14 },
-  dropdownTextActive: { color: Colors.lime, fontWeight: '700' },
-  activeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.lime },
+  dropdownItemActive: { backgroundColor: Colors.goldDim },
+  dropdownText: { color: Colors.textSecondary, fontSize: 14, fontFamily: 'DMSans_400Regular' },
+  dropdownTextActive: { color: Colors.gold, fontFamily: 'DMSans_500Medium' },
+  activeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.gold },
 
   modeToggle: {
     flexDirection: 'row', backgroundColor: Colors.bgSecondary,
     borderRadius: Radius.pill, padding: 3,
-    borderWidth: 1, borderColor: Colors.cardBorder,
+    borderWidth: 1, borderColor: Colors.border,
   },
   modeBtn:          { paddingHorizontal: 14, paddingVertical: 6, borderRadius: Radius.pill },
-  modeBtnActive:    { backgroundColor: Colors.limeDim, borderWidth: 1, borderColor: Colors.lime + '50' },
-  modeBtnText:      { color: Colors.textSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
-  modeBtnTextActive: { color: Colors.lime },
+  modeBtnActive:    { backgroundColor: Colors.goldDim, borderWidth: 1, borderColor: Colors.gold + '50' },
+  modeBtnText:      { color: Colors.textSecondary, fontSize: 12, fontFamily: 'DMSans_500Medium', letterSpacing: 0.5 },
+  modeBtnTextActive: { color: Colors.gold },
 
   scroll: { paddingHorizontal: Spacing.md },
 
   emptyState: { alignItems: 'center', paddingTop: 60, gap: 12 },
-  emptyTitle: { color: Colors.textSecondary, fontSize: 16, fontWeight: '600' },
-  emptySub:   { color: Colors.textMuted, fontSize: 13, textAlign: 'center', paddingHorizontal: 40 },
+  emptyTitle: { color: Colors.textSecondary, fontSize: 16, fontFamily: 'DMSans_500Medium' },
+  emptySub:   { color: Colors.textMuted, fontSize: 13, textAlign: 'center', paddingHorizontal: 40, fontFamily: 'DMSans_400Regular' },
   retryBtn: {
-    backgroundColor: Colors.limeDim, borderRadius: Radius.pill,
+    backgroundColor: Colors.goldDim, borderRadius: Radius.pill,
     paddingHorizontal: 20, paddingVertical: 8,
-    borderWidth: 1, borderColor: Colors.lime + '40',
+    borderWidth: 1, borderColor: Colors.gold + '40',
   },
-  retryText: { color: Colors.lime, fontSize: 13, fontWeight: '700' },
+  retryText: { color: Colors.gold, fontSize: 13, fontFamily: 'DMSans_500Medium' },
 
   // Podium
   podiumSection: { marginBottom: 16, gap: 10 },
@@ -321,42 +326,42 @@ const styles = StyleSheet.create({
   firstCardInner: {
     borderRadius: Radius.xl, padding: 20,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderWidth: 1, borderColor: Colors.lime + '30', overflow: 'hidden',
+    borderWidth: 1, borderColor: Colors.borderStrong, overflow: 'hidden',
   },
   firstGlow: {
     position: 'absolute', top: -30, left: -30, width: 120, height: 120,
-    borderRadius: 60, backgroundColor: Colors.lime, opacity: 0.08,
+    borderRadius: 60, backgroundColor: Colors.gold, opacity: 0.07,
   },
   firstLeft:  { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  firstName:  { color: Colors.textPrimary, fontSize: 16, fontWeight: '700' },
-  firstHcp:   { color: Colors.textSecondary, fontSize: 12, marginTop: 2 },
+  firstName:  { color: Colors.textPrimary, fontSize: 16, fontFamily: 'DMSans_500Medium' },
+  firstHcp:   { color: Colors.textSecondary, fontSize: 12, marginTop: 2, fontFamily: 'DMSans_400Regular' },
   firstRight: { alignItems: 'flex-end' },
-  firstScore: { fontSize: 32, fontWeight: '900', letterSpacing: -1 },
-  firstScoreLabel: { color: Colors.textSecondary, fontSize: 11, fontWeight: '600', letterSpacing: 0.5, marginTop: 2 },
+  firstScore: { fontSize: 32, fontFamily: 'DMMono_400Regular', letterSpacing: -1 },
+  firstScoreLabel: { color: Colors.textSecondary, fontSize: 11, fontFamily: 'DMSans_500Medium', letterSpacing: 0.5, marginTop: 2 },
 
   podiumRow:  { flexDirection: 'row', gap: 10 },
   podiumCard: { flex: 1 },
   podiumInner: { alignItems: 'center', gap: 6 },
-  podiumMedal: { fontSize: 20, fontWeight: '800', textAlign: 'center' },
-  podiumName:  { color: Colors.textPrimary, fontSize: 12, fontWeight: '600', textAlign: 'center' },
-  podiumScore: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
+  podiumMedal: { fontSize: 20, fontFamily: 'DMMono_400Regular', textAlign: 'center' },
+  podiumName:  { color: Colors.textPrimary, fontSize: 12, fontFamily: 'DMSans_500Medium', textAlign: 'center' },
+  podiumScore: { fontSize: 20, fontFamily: 'DMMono_400Regular', letterSpacing: -0.5 },
 
   // List
   listCard: { marginBottom: 16 },
   tableHeader: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: Colors.cardBorder,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
-  headerCell: { color: Colors.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
+  headerCell: { color: Colors.textMuted, fontSize: 10, fontFamily: 'DMSans_500Medium', letterSpacing: 0.8 },
 
   listRow:       { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 10 },
-  listRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
+  listRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.border },
   rankWrap:      { width: 40, flexDirection: 'row', alignItems: 'center', gap: 2 },
-  rankText:      { color: Colors.textSecondary, fontSize: 14, fontWeight: '700' },
+  rankText:      { color: Colors.textSecondary, fontSize: 14, fontFamily: 'DMMono_400Regular' },
   playerInfo:    { flex: 1, marginLeft: 4 },
-  playerName:    { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
-  playerHcp:     { color: Colors.textMuted, fontSize: 11, marginTop: 1 },
-  scoreCell:     { width: 56, textAlign: 'right', fontSize: 16, fontWeight: '700' },
-  holesCell:     { width: 36, textAlign: 'right', color: Colors.textMuted, fontSize: 13 },
+  playerName:    { color: Colors.textPrimary, fontSize: 14, fontFamily: 'DMSans_500Medium' },
+  playerHcp:     { color: Colors.textMuted, fontSize: 11, marginTop: 1, fontFamily: 'DMSans_400Regular' },
+  scoreCell:     { width: 56, textAlign: 'right', fontSize: 16, fontFamily: 'DMMono_400Regular' },
+  holesCell:     { width: 36, textAlign: 'right', color: Colors.textMuted, fontSize: 13, fontFamily: 'DMMono_400Regular' },
 });

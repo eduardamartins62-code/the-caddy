@@ -4,8 +4,10 @@ import {
   TextInput, ActivityIndicator, Linking, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Search, SlidersHorizontal, MapPin, Bookmark, Star, Home } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Bookmark, Home, Star, MapPin, Search, SlidersHorizontal } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as WebBrowser from 'expo-web-browser';
 import GlassCard from '../../components/ui/GlassCard';
 import { coursesApi } from '../../services/api';
 import { Colors, Radius, Spacing, Typography } from '../../constants/theme';
@@ -36,6 +38,11 @@ const FILTER_LABELS: { key: FilterType; label: string }[] = [
   { key: 'Par3', label: 'Par 3' },
   { key: 'NineHole', label: '9-Hole' },
 ];
+
+function bookTeeTime(courseName: string) {
+  const url = `https://www.golfnow.com/tee-times/search#search/facility-name=${encodeURIComponent(courseName)}`;
+  WebBrowser.openBrowserAsync(url);
+}
 
 // ─── Course Card ─────────────────────────────────────────────────────────────
 
@@ -79,7 +86,7 @@ function CourseCard({
         >
           <Bookmark
             size={18}
-            color={isHome ? Colors.lime : Colors.textSecondary}
+            stroke={isHome ? Colors.lime : Colors.textSecondary}
             fill={isHome ? Colors.lime : 'transparent'}
             strokeWidth={2}
           />
@@ -87,7 +94,7 @@ function CourseCard({
 
         {isHome && (
           <View style={styles.homeBadge}>
-            <Home size={10} color={Colors.bg} strokeWidth={2.5} />
+            <Home size={10} stroke={Colors.bg} strokeWidth={2.5} />
             <Text style={styles.homeBadgeText}>Home</Text>
           </View>
         )}
@@ -108,7 +115,7 @@ function CourseCard({
           {course.rating != null && (
             <>
               <Text style={styles.courseMetaDot}>·</Text>
-              <Star size={11} color={Colors.lime} fill={Colors.lime} strokeWidth={0} />
+              <Star size={11} stroke={Colors.lime} fill={Colors.lime} strokeWidth={0} />
               <Text style={styles.courseMetaText}>{course.rating.toFixed(1)}</Text>
             </>
           )}
@@ -117,7 +124,7 @@ function CourseCard({
 
       {/* Map button */}
       <TouchableOpacity style={styles.mapBtn} onPress={openMap} activeOpacity={0.7}>
-        <MapPin size={14} color={Colors.lime} strokeWidth={2} />
+        <MapPin size={14} stroke={Colors.lime} strokeWidth={2} />
         <Text style={styles.mapBtnText}>Map</Text>
       </TouchableOpacity>
     </GlassCard>
@@ -214,7 +221,7 @@ export default function CoursesScreen() {
       {/* Search bar */}
       <View style={styles.searchRow}>
         <View style={styles.searchInputWrap}>
-          <Search size={16} color={Colors.textSecondary} strokeWidth={2} />
+          <Search size={16} stroke={Colors.textSecondary} strokeWidth={2} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search Course"
@@ -227,7 +234,7 @@ export default function CoursesScreen() {
           />
         </View>
         <TouchableOpacity style={styles.filterIconBtn}>
-          <SlidersHorizontal size={18} color={Colors.textSecondary} strokeWidth={2} />
+          <SlidersHorizontal size={18} stroke={Colors.textSecondary} strokeWidth={2} />
         </TouchableOpacity>
       </View>
 
@@ -270,7 +277,7 @@ export default function CoursesScreen() {
         {!homeLoading && !homeCourse && showEmptySearch && (
           <GlassCard style={styles.setHomeCard} glow="lime">
             <View style={styles.setHomeRow}>
-              <MapPin size={20} color={Colors.lime} strokeWidth={2} />
+              <MapPin size={20} stroke={Colors.lime} strokeWidth={2} />
               <View style={styles.setHomeText}>
                 <Text style={styles.setHomeTitle}>Choose Your Home Course</Text>
                 <Text style={styles.setHomeSubtitle}>Pick the course you play most often</Text>
@@ -284,7 +291,7 @@ export default function CoursesScreen() {
         {!homeLoading && homeCourse && !showResults && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Home size={13} color={Colors.lime} strokeWidth={2} />
+              <Home size={13} stroke={Colors.lime} strokeWidth={2} />
               <Text style={styles.sectionLabel}>YOUR HOME COURSE</Text>
             </View>
             <CourseCard
@@ -305,7 +312,7 @@ export default function CoursesScreen() {
         {/* Empty search hint */}
         {showEmptySearch && (
           <View style={styles.centeredState}>
-            <Search size={36} color={Colors.textMuted} strokeWidth={1.5} />
+            <Search size={36} stroke={Colors.textMuted} strokeWidth={1.5} />
             <Text style={styles.emptyText}>Type to search for a course</Text>
             <Text style={styles.emptySubtext}>Search by name, city, or state</Text>
           </View>

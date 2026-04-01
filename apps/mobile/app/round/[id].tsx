@@ -425,7 +425,7 @@ const betStyles = StyleSheet.create({
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
-type RoundTab = 'scorecard' | 'bets';
+type RoundTab = 'scorecard' | 'bets' | 'skins';
 
 export default function RoundDetailScreen() {
   const { id }   = useLocalSearchParams<{ id: string }>();
@@ -443,6 +443,8 @@ export default function RoundDetailScreen() {
   const [padOpen, setPadOpen]         = useState(false);
   const [activeTab, setActiveTab]     = useState<RoundTab>('scorecard');
 
+  const [addSkinsLoading, setAddSkinsLoading] = useState(false);
+
   // Bets queries — lazy, only when Bets tab is active
   const { data: skinsData, isLoading: skinsLoading } = useQuery({
     queryKey: ['skins', id],
@@ -456,6 +458,38 @@ export default function RoundDetailScreen() {
     enabled: !!id && activeTab === 'bets',
     retry: false,
   });
+
+  // Skins game query — lazy, only when Skins tab is active
+  const { data: skinsGameApiData, isLoading: skinsGameApiLoading, refetch: refetchSkinsGame } = useQuery({
+    queryKey: ['skinsGame', id],
+    queryFn: () => (roundsApi as any).getSkinsGame ? (roundsApi as any).getSkinsGame(id) : Promise.resolve(null),
+    enabled: !!id && activeTab === 'skins',
+    retry: false,
+  });
+
+  async function handleAddSkinsGame() {
+    setAddSkinsLoading(true);
+    try {
+      const { skinsApi } = await import('../../services/api');
+      await skinsApi.create(id, { betPerHole: 1 });
+      refetchSkinsGame();
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Failed to create skins game');
+    } finally {
+      setAddSkinsLoading(false);
+    }
+  }
+
+  function computeSkinsPayouts(holesData: any[]) {
+    const payouts: Record<string, number> = {};
+    holesData.forEach((h: any) => {
+      if (h.winner) {
+        const name = h.winner?.name ?? h.winnerName ?? 'Unknown';
+        payouts[name] = (payouts[name] ?? 0) + (h.skinsWon ?? 1);
+      }
+    });
+    return payouts;
+  }
 
   const isAdmin = user?.role === 'SCOREKEEPER' || user?.role === 'SUPER_ADMIN';
 
@@ -476,7 +510,7 @@ export default function RoundDetailScreen() {
 
   const scoreMap = useMemo(() => {
     const map: Record<number, Record<string, number>> = {};
-    (scorecard?.scores ?? []).forEach((s: any) => {
+    ((scorecard?.scores as any) ?? []).forEach((s: any) => {
       if (!map[s.holeNumber]) map[s.holeNumber] = {};
       map[s.holeNumber][s.userId] = s.strokes;
     });
@@ -728,14 +762,14 @@ export default function RoundDetailScreen() {
 
       {/* Tab switcher */}
       <View style={styles.tabBar}>
-        {(['scorecard', 'bets'] as RoundTab[]).map((t) => (
+        {(['scorecard', 'bets', 'skins'] as RoundTab[]).map((t) => (
           <TouchableOpacity
             key={t}
             style={[styles.tabBtn, activeTab === t && styles.tabBtnActive]}
             onPress={() => setActiveTab(t)}
           >
             <Text style={[styles.tabBtnText, activeTab === t && styles.tabBtnTextActive]}>
-              {t === 'scorecard' ? 'Scorecard' : 'Bets'}
+              {t === 'scorecard' ? 'Scorecard' : t === 'bets' ? 'Bets' : 'Skins'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -859,6 +893,86 @@ export default function RoundDetailScreen() {
         </ScrollView>
       )}
 
+      {activeTab === 'skins' && (
+        /* ── Skins tab ── */
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: Spacing.md, paddingBottom: insets.bottom + 40, gap: 16 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.lime} />}
+          showsVerticalScrollIndicator={false}
+        >
+          {skinsGameApiLoading ? (
+            <ActivityIndicator size="small" color={Colors.lime} style={{ marginTop: 40 }} />
+          ) : !skinsGameApiData || (Array.isArray(skinsGameApiData) && skinsGameApiData.length === 0) ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="cash-outline" size={40} color={Colors.textMuted} />
+              <Text style={styles.emptyText}>No skins game yet.</Text>
+              <TouchableOpacity
+                style={[styles.retryBtn, { marginTop: 8, backgroundColor: Colors.goldDim }]}
+                onPress={handleAddSkinsGame}
+                disabled={addSkinsLoading}
+              >
+                {addSkinsLoading
+                  ? <ActivityIndicator size="small" color={Colors.gold} />
+                  : <Text style={[styles.retryText, { color: Colors.gold }]}>Add Skins Game</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <GlassCard>
+              <View style={styles.betSectionHeader}>
+                <Text style={styles.betSectionTitle}>Skins Game</Text>
+              </View>
+              {/* Per-hole results table */}
+              <View style={skinsTabStyles.table}>
+                <View style={skinsTabStyles.headerRow}>
+                  <Text style={[skinsTabStyles.cell, skinsTabStyles.cellHole]}>Hole</Text>
+                  <Text style={[skinsTabStyles.cell, skinsTabStyles.cellPar]}>Par</Text>
+                  <Text style={[skinsTabStyles.cell, skinsTabStyles.cellScore]}>Low</Text>
+                  <Text style={[skinsTabStyles.cell, skinsTabStyles.cellWinner]}>Winner</Text>
+                  <Text style={[skinsTabStyles.cell, skinsTabStyles.cellPot]}>Pot</Text>
+                </View>
+                {(Array.isArray(skinsGameApiData) ? skinsGameApiData : (skinsGameApiData?.holes ?? [])).map((h: any, idx: number) => {
+                  const isTied = !h.winner;
+                  const carryover = h.carryover ?? h.pot ?? 0;
+                  return (
+                    <View key={idx} style={[skinsTabStyles.dataRow, idx % 2 === 0 && skinsTabStyles.dataRowAlt]}>
+                      <Text style={[skinsTabStyles.cell, skinsTabStyles.cellHole, skinsTabStyles.dataText]}>{h.holeNumber ?? idx + 1}</Text>
+                      <Text style={[skinsTabStyles.cell, skinsTabStyles.cellPar, skinsTabStyles.dataText]}>{h.par ?? '–'}</Text>
+                      <Text style={[skinsTabStyles.cell, skinsTabStyles.cellScore, skinsTabStyles.dataText]}>{h.lowestScore ?? h.score ?? '–'}</Text>
+                      <Text style={[skinsTabStyles.cell, skinsTabStyles.cellWinner, isTied ? skinsTabStyles.carryText : skinsTabStyles.winnerText]}>
+                        {isTied ? `Carry $${carryover}` : (h.winner?.name ?? h.winnerName ?? '–')}
+                      </Text>
+                      <Text style={[skinsTabStyles.cell, skinsTabStyles.cellPot, isTied ? skinsTabStyles.carryText : skinsTabStyles.winnerText]}>
+                        {isTied ? `⚡` : `$${h.skinsWon ?? 1}`}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+              {/* Payout summary */}
+              {(() => {
+                const holesArr = Array.isArray(skinsGameApiData) ? skinsGameApiData : (skinsGameApiData?.holes ?? []);
+                const payouts = computeSkinsPayouts(holesArr);
+                const entries = Object.entries(payouts);
+                if (entries.length === 0) return null;
+                return (
+                  <View style={skinsTabStyles.payoutSection}>
+                    <Text style={skinsTabStyles.payoutTitle}>Payout Summary</Text>
+                    {entries.map(([name, skins]) => (
+                      <View key={name} style={skinsTabStyles.payoutRow}>
+                        <Text style={skinsTabStyles.payoutName}>{name}</Text>
+                        <Text style={skinsTabStyles.payoutAmount}>{skins} skin{skins !== 1 ? 's' : ''}</Text>
+                      </View>
+                    ))}
+                  </View>
+                );
+              })()}
+            </GlassCard>
+          )}
+        </ScrollView>
+      )}
+
       {/* Number pad modal */}
       {pad && (
         <NumberPad
@@ -872,6 +986,27 @@ export default function RoundDetailScreen() {
     </View>
   );
 }
+
+const skinsTabStyles = StyleSheet.create({
+  table: { borderRadius: Radius.md, overflow: 'hidden', borderWidth: 1, borderColor: Colors.cardBorder },
+  headerRow: { flexDirection: 'row', backgroundColor: Colors.bgTertiary, paddingVertical: 8 },
+  dataRow: { flexDirection: 'row', paddingVertical: 8 },
+  dataRowAlt: { backgroundColor: Colors.bg },
+  cell: { paddingHorizontal: 6, fontSize: 12, color: Colors.textSecondary, fontWeight: '600' },
+  cellHole: { width: 40, textAlign: 'center' },
+  cellPar: { width: 36, textAlign: 'center' },
+  cellScore: { width: 40, textAlign: 'center' },
+  cellWinner: { flex: 1 },
+  cellPot: { width: 48, textAlign: 'center' },
+  dataText: { color: Colors.textPrimary, fontWeight: '500', fontSize: 13 },
+  carryText: { color: Colors.purple, fontWeight: '700', flex: 1 },
+  winnerText: { color: Colors.lime, fontWeight: '700', flex: 1 },
+  payoutSection: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: Colors.cardBorder },
+  payoutTitle: { color: Colors.textPrimary, fontSize: 14, fontWeight: '700', marginBottom: 10 },
+  payoutRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder + '80' },
+  payoutName: { color: Colors.textPrimary, fontSize: 13, fontWeight: '600' },
+  payoutAmount: { color: Colors.lime, fontSize: 13, fontWeight: '700' },
+});
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 

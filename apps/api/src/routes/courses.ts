@@ -30,7 +30,7 @@ router.get('/search', async (req, res: Response) => {
     if (API_KEY) {
       try {
         const resp = await fetch(
-          `${GOLF_API_BASE}/search?search_query=${encodeURIComponent(q)}`,
+          `https://api.golfcourseapi.com/v1/search?search_query=${encodeURIComponent(q)}&key=${API_KEY}`,
           { headers: { Authorization: `Key ${API_KEY}` } }
         );
         if (resp.ok) {
@@ -140,9 +140,16 @@ router.get('/home', authenticate, async (req: AuthRequest, res: Response) => {
 // GET /api/courses/:id — get single course detail
 router.get('/:id', async (req, res: Response) => {
   try {
-    const course = await prisma.golfCourse.findUnique({ where: { id: req.params.id } });
+    const course = await prisma.golfCourse.findUnique({
+      where: { id: req.params.id },
+      include: { reviews: { select: { rating: true } } },
+    });
     if (!course) { res.status(404).json({ error: 'Course not found' }); return; }
-    res.json({ data: course });
+    const { reviews, ...courseData } = course;
+    const averageRating = reviews.length
+      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+      : null;
+    res.json({ data: { ...courseData, averageRating, reviewCount: reviews.length } });
   } catch (err) {
     console.error('GET /courses/:id error', err);
     res.status(500).json({ error: 'Internal server error' });

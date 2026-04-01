@@ -23,7 +23,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Take photos for your profile and posts",
         "NSPhotoLibraryUsageDescription": "Upload photos for your profile and posts",
-        "NSLocationWhenInUseUsageDescription": "Find nearby golfers and courses"
+        "NSLocationWhenInUseUsageDescription": "Find nearby golfers and courses",
+        "NSUserNotificationsUsageDescription": "Get notified about scores, invites, messages, and events"
       }
     },
     "android": {
@@ -56,7 +57,7 @@
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
-          "color": "#C9F31D",
+          "color": "#D4A843",
           "sounds": []
         }
       ],
@@ -73,7 +74,11 @@
           "locationWhenInUsePermission": "Show your location to help find nearby golfers."
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-font",
+      "@expo-google-fonts/cormorant-garamond",
+      "@expo-google-fonts/dm-sans",
+      "@expo-google-fonts/dm-mono"
     ],
     "experiments": {
       "typedRoutes": true

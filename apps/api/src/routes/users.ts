@@ -254,6 +254,30 @@ router.get('/follow-requests', authenticate, async (req: AuthRequest, res: Respo
   }
 });
 
+// GET /api/users/nearby?city= — users with same location/city
+router.get('/nearby', authenticate, async (req: AuthRequest, res: Response) => {
+  const city = (req.query.city as string || '').trim();
+  if (!city) {
+    res.json({ data: [] });
+    return;
+  }
+  try {
+    const users = await prisma.user.findMany({
+      where: {
+        id: { not: req.user!.id },
+        location: { contains: city },
+      },
+      select: { id: true, name: true, username: true, avatar: true, handicap: true, location: true },
+      take: 20,
+      orderBy: { name: 'asc' },
+    });
+    res.json({ data: users });
+  } catch (err) {
+    console.error('GET /users/nearby error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/users/suggestions — users in same events but not yet followed
 router.get('/suggestions', authenticate, async (req: AuthRequest, res: Response) => {
   const userId = req.user!.id;

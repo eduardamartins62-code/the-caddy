@@ -1,26 +1,21 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, StyleSheet, KeyboardAvoidingView, Platform,
-  TouchableOpacity, Alert,
+  TouchableOpacity, Alert, ScrollView, Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Mail, Phone } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
-import { authApi } from '../../services/api';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { authApi, inviteApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import GradientButton from '../../components/ui/GradientButton';
 import { Colors, Radius, Spacing } from '../../constants/theme';
 
 WebBrowser.maybeCompleteAuthSession();
 
 // ─── Google OAuth config ─────────────────────────────────────────────────────
-// Add these to your .env file to enable Google Sign-In:
-//   EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=your_web_client_id
-//   EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=your_ios_client_id
-//   EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=your_android_client_id
-// Get credentials at: https://console.cloud.google.com/apis/credentials
 const GOOGLE_WEB_CLIENT_ID     = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID     ?? '';
 const GOOGLE_IOS_CLIENT_ID     = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID     ?? '';
 const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? '';
@@ -32,16 +27,31 @@ function isPhone(input: string): boolean {
 }
 
 export default function SignInScreen() {
-  const [tab, setTab]         = useState<'login' | 'create'>('login');
-  const [contact, setContact] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
+  const [inputMode, setInputMode]       = useState<'email' | 'phone'>('email');
+  const [contact, setContact]           = useState('');
+  const [loading, setLoading]           = useState(false);
+  const [error, setError]               = useState('');
+  const [focused, setFocused]           = useState(false);
+  // Invite code state
+  const [inviteOnly, setInviteOnly]     = useState(false);
+  const [inviteCode, setInviteCode]     = useState('');
+  const [inviteFocused, setInviteFocused] = useState(false);
+  const [waitlistModal, setWaitlistModal] = useState(false);
+  const [waitlistEmail, setWaitlistEmail] = useState('');
+  const [waitlistLoading, setWaitlistLoading] = useState(false);
   const router = useRouter();
   const { signIn } = useAuth();
 
-  const usePhone = contact.trim().length > 0 && isPhone(contact.trim()) && !contact.includes('@');
+  React.useEffect(() => {
+    inviteApi.getStatus().then((data: any) => {
+      setInviteOnly(data?.inviteOnly === true);
+    }).catch(() => {});
+  }, []);
+
+  const usePhone = inputMode === 'phone';
   const isEmail  = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.trim());
-  const isValid  = usePhone || isEmail;
+  const isValidPhone = isPhone(contact.trim());
+  const isValid  = usePhone ? isValidPhone : isEmail;
 
   async function handleSocialToken(provider: 'google' | 'apple', token: string) {
     setLoading(true);
@@ -76,13 +86,12 @@ export default function SignInScreen() {
         const match = result.url.match(/access_token=([^&]+)/);
         if (match) await handleSocialToken('google', match[1]);
       }
-    } catch (e) {
+    } catch {
       setError('Google Sign-In failed. Try another method.');
     }
   }
 
   async function handleAppleSignIn() {
-    // expo-apple-authentication is iOS-only
     if (Platform.OS !== 'ios') {
       Alert.alert('Not available', 'Apple Sign-In is only available on iPhone.');
       return;
@@ -105,18 +114,32 @@ export default function SignInScreen() {
     }
   }
 
+  async function handleJoinWaitlist() {
+    if (!waitlistEmail.trim()) return;
+    setWaitlistLoading(true);
+    try {
+      await inviteApi.joinWaitlist(waitlistEmail.trim().toLowerCase());
+      setWaitlistModal(false);
+      Alert.alert("You're on the list!", "We'll notify you when a spot opens up.");
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Failed to join waitlist.');
+    } finally {
+      setWaitlistLoading(false);
+    }
+  }
+
   async function handleOtpSubmit() {
     const trimmed = contact.trim();
     if (!trimmed) { setError('Enter your email or phone number'); return; }
-    if (!isValid) { setError('Enter a valid email or phone number'); return; }
+    if (!isValid) { setError(usePhone ? 'Enter a valid phone number' : 'Enter a valid email address'); return; }
     setError('');
     setLoading(true);
     try {
       if (usePhone) {
-        await authApi.requestOtp(undefined, trimmed);
+        await authApi.requestOtp(undefined, trimmed, inviteOnly ? inviteCode.trim() : undefined);
         router.push({ pathname: '/(auth)/verify', params: { contact: trimmed, via: 'phone' } });
       } else {
-        await authApi.requestOtp(trimmed.toLowerCase());
+        await authApi.requestOtp(trimmed.toLowerCase(), undefined, inviteOnly ? inviteCode.trim() : undefined);
         router.push({ pathname: '/(auth)/verify', params: { contact: trimmed.toLowerCase(), via: 'email' } });
       }
     } catch (e: unknown) {
@@ -127,71 +150,54 @@ export default function SignInScreen() {
   }
 
   return (
-    <View style={styles.screen}>
-      <View style={styles.glowTop} />
-      <View style={styles.glowBottom} />
+    <SafeAreaView style={styles.screen}>
+      {/* Golf course silhouette at bottom */}
+      <View style={styles.hillsContainer} pointerEvents="none">
+        <View style={styles.hillBack} />
+        <View style={styles.hillMid} />
+        <View style={styles.hillFront} />
+      </View>
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
-        {/* Hero */}
-        <View style={styles.hero}>
-          <View style={styles.logoMark}>
-            <Ionicons name="golf" size={38} color={Colors.bg} />
+      {/* Subtle gold glow top */}
+      <View style={styles.glowTop} pointerEvents="none" />
+
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.kav}>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {/* Logo */}
+          <View style={styles.hero}>
+            <Text style={styles.brandName}>THE CADDY</Text>
+            <Text style={styles.tagline}>Your game. Your people.</Text>
           </View>
-          <Text style={styles.brandName}>THE CADDY</Text>
-          <Text style={styles.subtitle}>Your golf social platform</Text>
-        </View>
 
-        {/* Tab selector */}
-        <View style={styles.tabRow}>
-          <TouchableOpacity
-            style={[styles.tab, tab === 'login' && styles.tabActive]}
-            onPress={() => { setTab('login'); setError(''); }}
-          >
-            <Text style={[styles.tabText, tab === 'login' && styles.tabTextActive]}>Log In</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, tab === 'create' && styles.tabActive]}
-            onPress={() => { setTab('create'); setError(''); }}
-          >
-            <Text style={[styles.tabText, tab === 'create' && styles.tabTextActive]}>Create Account</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.card}>
-          {/* Social buttons */}
-          {Platform.OS === 'ios' && (
-            <TouchableOpacity style={styles.socialBtn} onPress={handleAppleSignIn} disabled={loading}>
-              <Ionicons name="logo-apple" size={20} color={Colors.textPrimary} />
-              <Text style={styles.socialBtnText}>
-                {tab === 'create' ? 'Sign up' : 'Sign in'} with Apple
-              </Text>
+          {/* Email / Phone toggle */}
+          <View style={styles.toggleRow}>
+            <TouchableOpacity
+              style={[styles.toggleBtn, inputMode === 'email' && styles.toggleBtnActive]}
+              onPress={() => { setInputMode('email'); setContact(''); setError(''); }}
+            >
+              <Text style={[styles.toggleText, inputMode === 'email' && styles.toggleTextActive]}>Email</Text>
+              {inputMode === 'email' && <View style={styles.toggleUnderline} />}
             </TouchableOpacity>
-          )}
-
-          <TouchableOpacity style={styles.socialBtn} onPress={handleGoogleSignIn} disabled={loading}>
-            <GoogleIcon />
-            <Text style={styles.socialBtnText}>
-              {tab === 'create' ? 'Sign up' : 'Sign in'} with Google
-            </Text>
-          </TouchableOpacity>
-
-          {/* Divider */}
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or continue with email</Text>
-            <View style={styles.dividerLine} />
+            <TouchableOpacity
+              style={[styles.toggleBtn, inputMode === 'phone' && styles.toggleBtnActive]}
+              onPress={() => { setInputMode('phone'); setContact(''); setError(''); }}
+            >
+              <Text style={[styles.toggleText, inputMode === 'phone' && styles.toggleTextActive]}>Phone</Text>
+              {inputMode === 'phone' && <View style={styles.toggleUnderline} />}
+            </TouchableOpacity>
           </View>
 
-          {/* OTP input */}
-          <View style={[styles.inputWrap, error ? styles.inputWrapError : undefined]}>
-            {usePhone
-              ? <Phone size={18} color={Colors.textSecondary} strokeWidth={1.8} />
-              : <Mail size={18} color={Colors.textSecondary} strokeWidth={1.8} />
-            }
+          {/* Input */}
+          <View style={[styles.inputWrap, focused && styles.inputWrapFocused, !!error && styles.inputWrapError]}>
+            <Ionicons
+              name={usePhone ? 'phone-portrait-outline' : 'mail-outline'}
+              size={18}
+              color={focused ? Colors.gold : Colors.textSecondary}
+            />
             <TextInput
               style={styles.input}
-              placeholder="Email or phone number"
-              placeholderTextColor={Colors.textSecondary}
+              placeholder={usePhone ? 'Phone number' : 'Email address'}
+              placeholderTextColor={Colors.textMuted}
               value={contact}
               onChangeText={v => { setContact(v); setError(''); }}
               keyboardType={usePhone ? 'phone-pad' : 'email-address'}
@@ -199,6 +205,8 @@ export default function SignInScreen() {
               autoCorrect={false}
               returnKeyType="done"
               onSubmitEditing={handleOtpSubmit}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
             />
             {isValid && (
               <View style={styles.inputTag}>
@@ -207,6 +215,34 @@ export default function SignInScreen() {
             )}
           </View>
 
+          {/* Invite code — only shown in invite-only mode */}
+          {inviteOnly && (
+            <>
+              <View style={[styles.inputWrap, inviteFocused && styles.inputWrapFocused]}>
+                <Ionicons
+                  name="key-outline"
+                  size={18}
+                  color={inviteFocused ? Colors.gold : Colors.textSecondary}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Invite Code (optional)"
+                  placeholderTextColor={Colors.textMuted}
+                  value={inviteCode}
+                  onChangeText={setInviteCode}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  onFocus={() => setInviteFocused(true)}
+                  onBlur={() => setInviteFocused(false)}
+                />
+              </View>
+              <TouchableOpacity onPress={() => setWaitlistModal(true)} style={styles.waitlistLink}>
+                <Text style={styles.waitlistLinkText}>Don't have a code? Join waitlist</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
           {!!error && (
             <View style={styles.errorRow}>
               <Ionicons name="alert-circle-outline" size={14} color={Colors.error} />
@@ -214,23 +250,100 @@ export default function SignInScreen() {
             </View>
           )}
 
-          <GradientButton
-            label="Send Login Code"
-            onPress={handleOtpSubmit}
-            loading={loading}
-            style={{ marginTop: 4 }}
-          />
+          {/* Continue CTA */}
+          <TouchableOpacity onPress={handleOtpSubmit} disabled={loading} activeOpacity={0.85} style={{ marginTop: 4 }}>
+            <LinearGradient
+              colors={['#F0C866', '#C4912A']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.ctaBtn}
+            >
+              <Text style={styles.ctaText}>
+                {loading ? 'Sending…' : 'Continue'}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
 
           <Text style={styles.hint}>
-            We'll text or email a 6-digit code.{'\n'}No password needed.
+            We'll {usePhone ? 'text' : 'email'} a 6-digit code — no password needed.
           </Text>
-        </View>
+
+          {/* Divider */}
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or continue with</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Social buttons */}
+          {Platform.OS === 'ios' && (
+            <TouchableOpacity style={styles.socialBtn} onPress={handleAppleSignIn} disabled={loading}>
+              <Ionicons name="logo-apple" size={20} color={Colors.textPrimary} />
+              <Text style={styles.socialBtnText}>Continue with Apple</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity style={styles.socialBtn} onPress={handleGoogleSignIn} disabled={loading}>
+            <GoogleIcon />
+            <Text style={styles.socialBtnText}>Continue with Google</Text>
+          </TouchableOpacity>
+
+          {/* Privacy + Terms */}
+          <View style={styles.legalRow}>
+            <TouchableOpacity onPress={() => router.push('/privacy' as any)}>
+              <Text style={styles.legalLink}>Privacy Policy</Text>
+            </TouchableOpacity>
+            <View style={styles.legalDot} />
+            <TouchableOpacity onPress={() => router.push('/terms' as any)}>
+              <Text style={styles.legalLink}>Terms of Service</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
-    </View>
+
+      {/* Waitlist Modal */}
+      <Modal visible={waitlistModal} transparent animationType="slide" onRequestClose={() => setWaitlistModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Join the Waitlist</Text>
+            <Text style={styles.modalSubtitle}>Enter your email and we'll notify you when a spot opens up.</Text>
+            <View style={[styles.inputWrap, { marginBottom: 16 }]}>
+              <Ionicons name="mail-outline" size={18} color={Colors.textSecondary} />
+              <TextInput
+                style={styles.input}
+                placeholder="Email address"
+                placeholderTextColor={Colors.textMuted}
+                value={waitlistEmail}
+                onChangeText={setWaitlistEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+            <TouchableOpacity
+              onPress={handleJoinWaitlist}
+              disabled={waitlistLoading || !waitlistEmail.trim()}
+              activeOpacity={0.85}
+            >
+              <LinearGradient
+                colors={['#F0C866', '#C4912A']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.ctaBtn, { opacity: waitlistLoading || !waitlistEmail.trim() ? 0.6 : 1 }]}
+              >
+                <Text style={styles.ctaText}>{waitlistLoading ? 'Joining…' : 'Join Waitlist'}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setWaitlistModal(false)} style={{ alignItems: 'center', marginTop: 16 }}>
+              <Text style={{ color: Colors.textMuted, fontFamily: 'DMSans_400Regular', fontSize: 14 }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
-// Inline Google "G" icon (SVG-free, just styled text)
 function GoogleIcon() {
   return (
     <View style={styles.googleIcon}>
@@ -243,96 +356,250 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
 
   glowTop: {
-    position: 'absolute', top: -100, left: '50%', marginLeft: -150,
-    width: 300, height: 300, borderRadius: 150,
-    backgroundColor: Colors.lime, opacity: 0.06,
-  },
-  glowBottom: {
-    position: 'absolute', bottom: -80, right: -60,
-    width: 250, height: 250, borderRadius: 125,
-    backgroundColor: Colors.purple, opacity: 0.08,
+    position: 'absolute',
+    top: -120,
+    left: '50%' as any,
+    marginLeft: -150,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: Colors.gold,
+    opacity: 0.06,
   },
 
-  container: { flex: 1, justifyContent: 'center', padding: Spacing.lg },
-
-  hero: { alignItems: 'center', marginBottom: 28 },
-  logoMark: {
-    width: 72, height: 72, borderRadius: 36,
-    backgroundColor: Colors.lime,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 18,
-    shadowColor: Colors.lime,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5, shadowRadius: 20, elevation: 12,
+  // Hills silhouette
+  hillsContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 130,
+    overflow: 'hidden',
   },
+  hillBack: {
+    position: 'absolute',
+    bottom: 0,
+    left: -40,
+    right: -40,
+    height: 90,
+    borderTopLeftRadius: 200,
+    borderTopRightRadius: 160,
+    backgroundColor: Colors.bgTertiary,
+    opacity: 0.6,
+  },
+  hillMid: {
+    position: 'absolute',
+    bottom: 0,
+    left: -20,
+    right: -20,
+    height: 60,
+    borderTopLeftRadius: 140,
+    borderTopRightRadius: 200,
+    backgroundColor: Colors.bgSecondary,
+    opacity: 0.8,
+  },
+  hillFront: {
+    position: 'absolute',
+    bottom: 0,
+    left: -60,
+    right: -10,
+    height: 36,
+    borderTopLeftRadius: 100,
+    borderTopRightRadius: 260,
+    backgroundColor: Colors.bgElevated,
+    opacity: 0.9,
+  },
+
+  kav: { flex: 1 },
+  scroll: { padding: Spacing.lg, paddingTop: Spacing.xxl, paddingBottom: 160 },
+
+  hero: { alignItems: 'center', marginBottom: 36 },
   brandName: {
-    color: Colors.textPrimary, fontSize: 28, fontWeight: '900',
-    letterSpacing: 6, marginBottom: 6,
+    color: Colors.gold,
+    fontSize: 42,
+    fontFamily: 'CormorantGaramond_700Bold',
+    letterSpacing: 4,
+    marginBottom: 8,
   },
-  subtitle: { color: Colors.textSecondary, fontSize: 14 },
+  tagline: {
+    color: Colors.textSecondary,
+    fontSize: 15,
+    fontFamily: 'DMSans_400Regular',
+    fontStyle: 'italic',
+  },
 
-  tabRow: {
-    flexDirection: 'row', gap: 8, marginBottom: 12,
-    backgroundColor: Colors.bgSecondary,
-    borderRadius: Radius.lg, padding: 4,
-    borderWidth: 1, borderColor: Colors.cardBorder,
+  toggleRow: {
+    flexDirection: 'row',
+    gap: 24,
+    marginBottom: 16,
+    paddingHorizontal: 4,
   },
-  tab: {
-    flex: 1, paddingVertical: 10, alignItems: 'center',
-    borderRadius: Radius.md,
+  toggleBtn: { alignItems: 'center', paddingBottom: 6, position: 'relative' },
+  toggleBtnActive: {},
+  toggleText: {
+    color: Colors.textMuted,
+    fontSize: 15,
+    fontFamily: 'DMSans_500Medium',
   },
-  tabActive: { backgroundColor: Colors.bgTertiary, borderWidth: 1, borderColor: Colors.cardBorder },
-  tabText: { color: Colors.textMuted, fontSize: 14, fontWeight: '600' },
-  tabTextActive: { color: Colors.textPrimary },
+  toggleTextActive: { color: Colors.textPrimary },
+  toggleUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: Colors.gold,
+  },
 
-  card: {
-    backgroundColor: Colors.bgSecondary,
-    borderRadius: Radius.xl, borderWidth: 1,
-    borderColor: Colors.glassBorder, padding: Spacing.lg,
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
+    backgroundColor: Colors.bgSecondary,
+    borderRadius: Radius.lg,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    paddingHorizontal: 14,
+    height: 54,
+    marginBottom: 8,
+  },
+  inputWrapFocused: { borderColor: Colors.gold },
+  inputWrapError: { borderColor: Colors.error },
+  input: {
+    flex: 1,
+    color: Colors.textPrimary,
+    fontSize: 16,
+    fontFamily: 'DMSans_400Regular',
+  },
+  inputTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: Colors.goldDim,
+    borderRadius: Radius.pill,
+  },
+  inputTagText: {
+    color: Colors.gold,
+    fontSize: 10,
+    fontFamily: 'DMSans_500Medium',
+    letterSpacing: 0.5,
+  },
+
+  errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  error: { color: Colors.error, fontSize: 13, fontFamily: 'DMSans_400Regular' },
+
+  ctaBtn: {
+    height: 52,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  ctaText: {
+    color: Colors.bg,
+    fontSize: 16,
+    fontFamily: 'DMSans_500Medium',
+    letterSpacing: 0.5,
+  },
+
+  hint: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    textAlign: 'center',
+    fontFamily: 'DMSans_400Regular',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginVertical: 20,
+  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
+  dividerText: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
   },
 
   socialBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    height: 50, borderRadius: Radius.lg,
-    backgroundColor: Colors.bgTertiary,
-    borderWidth: 1.5, borderColor: Colors.cardBorder,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    height: 52,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.bgSecondary,
+    borderWidth: 1,
+    borderColor: 'rgba(244,239,230,0.12)',
+    marginBottom: 12,
   },
-  socialBtnText: { color: Colors.textPrimary, fontSize: 15, fontWeight: '600' },
+  socialBtnText: {
+    color: Colors.textPrimary,
+    fontSize: 15,
+    fontFamily: 'DMSans_500Medium',
+  },
 
   googleIcon: {
-    width: 20, height: 20, borderRadius: 10,
-    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   googleIconText: { color: '#4285F4', fontSize: 13, fontWeight: '900' },
 
-  dividerRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    marginVertical: 4,
+  legalRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+    marginTop: 24,
   },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.cardBorder },
-  dividerText: { color: Colors.textMuted, fontSize: 11, fontWeight: '500' },
-
-  inputWrap: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: Colors.bgTertiary, borderRadius: Radius.lg,
-    borderWidth: 1.5, borderColor: Colors.cardBorder,
-    paddingHorizontal: 14, height: 52,
+  legalLink: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
   },
-  inputWrapError: { borderColor: Colors.error },
-  input: { flex: 1, color: Colors.textPrimary, fontSize: 16 },
-
-  inputTag: {
-    paddingHorizontal: 8, paddingVertical: 3,
-    backgroundColor: Colors.limeDim, borderRadius: Radius.pill,
+  legalDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: Colors.textMuted,
   },
-  inputTagText: { color: Colors.lime, fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
 
-  errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  error: { color: Colors.error, fontSize: 13 },
+  waitlistLink: { alignSelf: 'flex-start', marginBottom: 8, marginTop: -4 },
+  waitlistLinkText: { color: Colors.gold, fontSize: 13, fontFamily: 'DMSans_400Regular', textDecorationLine: 'underline' },
 
-  hint: {
-    color: Colors.textMuted, fontSize: 12, textAlign: 'center',
-    lineHeight: 18,
+  // Waitlist modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: Colors.bgSecondary,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 28,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  modalTitle: {
+    fontFamily: 'CormorantGaramond_600SemiBold',
+    fontSize: 22,
+    color: Colors.textPrimary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 20,
   },
 });

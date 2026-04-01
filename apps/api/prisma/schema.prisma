@@ -59,6 +59,11 @@ model User {
   receivedMessages Message[]          @relation("MessageReceiver")
   handicapRecords  HandicapRecord[]
   homeCourseRel    GolfCourse?        @relation("HomeCourse", fields: [homeCourseId], references: [id])
+  badges           Badge[]
+  inviteCodesCreated InviteCode[]     @relation("InviteCreated")
+  inviteCodeUsed   InviteCode?        @relation("InviteUsed")
+  courseReviews    CourseReview[]
+  eventTemplates   EventTemplate[]
 }
 
 model Follow {
@@ -158,6 +163,7 @@ model GolfCourse {
 
   rounds    Round[]
   homeUsers User[]  @relation("HomeCourse")
+  reviews   CourseReview[]
 }
 
 model Round {
@@ -180,6 +186,7 @@ model Round {
   golfCourse GolfCourse? @relation(fields: [courseId], references: [id])
   holes      RoundHole[]
   scores     Score[]
+  skinsGame  SkinsGame?
 }
 
 model RoundHole {
@@ -341,4 +348,77 @@ model OTP {
   used      Boolean  @default(false)
   expiresAt DateTime
   createdAt DateTime @default(now())
+}
+
+model Badge {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // FIRST_ROUND | FIRST_BIRDIE | EAGLE_SCOUT | ACE | TEN_ROUNDS | FIFTY_ROUNDS | BIRDIE_MACHINE | GLOBE_TROTTER | SOCIAL_BUTTERFLY | CHAMPION
+  earnedAt  DateTime @default(now())
+  metadata  String?  // JSON
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, type])
+}
+
+model InviteCode {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  createdById String
+  usedById    String?   @unique
+  usedAt      DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  createdBy User  @relation("InviteCreated", fields: [createdById], references: [id])
+  usedBy    User? @relation("InviteUsed",    fields: [usedById],    references: [id])
+}
+
+model Waitlist {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}
+
+model CourseReview {
+  id           String   @id @default(cuid())
+  courseId     String
+  userId       String
+  rating       Int      // 1-5
+  review       String?
+  difficulty   Int?     // 1-5
+  wouldPlayAgain Boolean @default(true)
+  createdAt    DateTime @default(now())
+
+  course GolfCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user   User       @relation(fields: [userId],   references: [id], onDelete: Cascade)
+  @@unique([courseId, userId])
+}
+
+model SkinsGame {
+  id        String   @id @default(cuid())
+  roundId   String   @unique
+  stake     Float    @default(0)
+  carryover Boolean  @default(true)
+  results   String?  // JSON: computed skins results
+  createdAt DateTime @default(now())
+
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+}
+
+model EventTemplate {
+  id           String   @id @default(cuid())
+  name         String
+  createdById  String
+  templateData String   // JSON: event type, recurrence, format, itinerary structure
+  usageCount   Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  createdBy User @relation(fields: [createdById], references: [id])
+}
+
+model AppSetting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String // JSON or plain string
 }

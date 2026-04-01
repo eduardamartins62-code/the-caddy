@@ -23,6 +23,7 @@ import AvatarRing from '../../components/ui/AvatarRing';
 import GlassCard from '../../components/ui/GlassCard';
 import GradientButton from '../../components/ui/GradientButton';
 import SkeletonLoader from '../../components/ui/SkeletonLoader';
+import BadgeGrid from '../../components/ui/BadgeGrid';
 import { Colors, Radius, Spacing } from '../../constants/theme';
 
 type ProfileTab = 'posts' | 'rounds' | 'stats';
@@ -163,12 +164,12 @@ export default function ProfileTab() {
             style={styles.iconBtn}
             onPress={() => router.push('/notifications' as any)}
           >
-            <Bell size={19} color={unread > 0 ? Colors.lime : Colors.textSecondary} strokeWidth={2} />
+            <Bell size={19} stroke={unread > 0 ? Colors.lime : Colors.textSecondary} strokeWidth={2} />
             {unread > 0 && <View style={styles.bellBadge}><Text style={styles.bellBadgeText}>{unread > 9 ? '9+' : unread}</Text></View>}
           </TouchableOpacity>
           {(user.role === 'SUPER_ADMIN' || user.role === 'SCOREKEEPER') && (
             <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/admin/index' as any)}>
-              <Shield size={19} color={Colors.lime} strokeWidth={2} />
+              <Shield size={19} stroke={Colors.lime} strokeWidth={2} />
             </TouchableOpacity>
           )}
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/settings' as any)}>
@@ -179,7 +180,7 @@ export default function ProfileTab() {
 
       {meError ? (
         <View style={styles.errorContainer}>
-          <AlertCircle size={40} color={Colors.error} strokeWidth={1.5} />
+          <AlertCircle size={40} stroke={Colors.error} strokeWidth={1.5} />
           <Text style={styles.errorTitle}>Failed to load profile</Text>
           <TouchableOpacity onPress={() => refetchMe()} style={styles.retryBtn}>
             <Text style={styles.retryText}>Try Again</Text>
@@ -200,7 +201,7 @@ export default function ProfileTab() {
                 <View style={styles.cameraBadge}>
                   {avatarUploading
                     ? <ActivityIndicator size="small" color={Colors.bg} />
-                    : <Camera size={13} color={Colors.bg} strokeWidth={2.5} />}
+                    : <Camera size={13} stroke={Colors.bg} strokeWidth={2.5} />}
                 </View>
               </TouchableOpacity>
               <View style={styles.heroInfo}>
@@ -210,13 +211,13 @@ export default function ProfileTab() {
                 </View>
                 {user.homeCourse && (
                   <View style={styles.metaRow}>
-                    <Flag size={11} color={Colors.textMuted} strokeWidth={1.5} />
+                    <Flag size={11} stroke={Colors.textMuted} strokeWidth={1.5} />
                     <Text style={styles.metaText}>{user.homeCourse}</Text>
                   </View>
                 )}
                 {user.location && (
                   <View style={styles.metaRow}>
-                    <MapPin size={11} color={Colors.textMuted} strokeWidth={1.5} />
+                    <MapPin size={11} stroke={Colors.textMuted} strokeWidth={1.5} />
                     <Text style={styles.metaText}>{user.location}</Text>
                   </View>
                 )}
@@ -289,13 +290,16 @@ export default function ProfileTab() {
             {HIGHLIGHTS.map((h) => (
               <TouchableOpacity key={h.label} style={styles.highlightItem} activeOpacity={0.7}>
                 <View style={[styles.highlightCircle, { borderColor: h.color + '40' }]}>
-                  <h.Icon size={22} color={h.color} strokeWidth={1.8} />
+                  <h.Icon size={22} stroke={h.color} strokeWidth={1.8} />
                 </View>
                 <Text style={styles.highlightValue}>{loading ? '–' : h.value}</Text>
                 <Text style={styles.highlightLabel}>{h.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
+
+          {/* ── Badges ── */}
+          {userId && <BadgeGrid userId={userId} />}
 
           {/* ── 3-tab selector ── */}
           <View style={styles.tabToggle}>
@@ -311,7 +315,7 @@ export default function ProfileTab() {
               >
                 <t.Icon
                   size={20}
-                  color={activeTab === t.id ? Colors.lime : Colors.textMuted}
+                  stroke={activeTab === t.id ? Colors.lime : Colors.textMuted}
                   strokeWidth={activeTab === t.id ? 2.2 : 1.7}
                 />
               </TouchableOpacity>
@@ -329,7 +333,7 @@ export default function ProfileTab() {
                 </>
               ) : (posts as any[]).length === 0 ? (
                 <View style={styles.emptyState}>
-                  <LayoutGrid size={36} color={Colors.textMuted} strokeWidth={1.5} />
+                  <LayoutGrid size={36} stroke={Colors.textMuted} strokeWidth={1.5} />
                   <Text style={styles.emptyText}>No posts yet</Text>
                 </View>
               ) : (
@@ -362,7 +366,7 @@ export default function ProfileTab() {
                 </>
               ) : (rounds as any[]).length === 0 ? (
                 <View style={styles.emptyState}>
-                  <Flag size={36} color={Colors.textMuted} strokeWidth={1.5} />
+                  <Flag size={36} stroke={Colors.textMuted} strokeWidth={1.5} />
                   <Text style={styles.emptyText}>No rounds yet</Text>
                 </View>
               ) : (rounds as any[]).map((r: any) => (
@@ -398,7 +402,7 @@ export default function ProfileTab() {
                 </>
               ) : statsError ? (
                 <View style={styles.emptyState}>
-                  <AlertCircle size={36} color={Colors.error} strokeWidth={1.5} />
+                  <AlertCircle size={36} stroke={Colors.error} strokeWidth={1.5} />
                   <Text style={styles.emptyText}>Could not load stats</Text>
                 </View>
               ) : (
@@ -411,7 +415,7 @@ export default function ProfileTab() {
                   { label: 'Total Rounds',   value: stats?.totalRounds  ?? 0,    Icon: Map,        color: Colors.textPrimary },
                 ].map((s) => (
                   <GlassCard key={s.label} style={styles.statCard} padding={14}>
-                    <s.Icon size={22} color={s.color} strokeWidth={1.8} />
+                    <s.Icon size={22} stroke={s.color} strokeWidth={1.8} />
                     <Text style={styles.statLabel}>{s.label}</Text>
                     <Text style={[styles.statValue, { color: s.color }]}>{s.value}</Text>
                   </GlassCard>
@@ -483,92 +487,96 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
 
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingVertical: 14 },
-  username: { color: Colors.textPrimary, fontSize: 20, fontWeight: '800' },
+  username: {
+    color: Colors.textPrimary,
+    fontSize: 20,
+    fontFamily: 'CormorantGaramond_600SemiBold',
+  },
   topBarRight: { flexDirection: 'row', gap: 8 },
   iconBtn: {
     width: 38, height: 38, borderRadius: 19,
-    backgroundColor: Colors.bgSecondary, borderWidth: 1, borderColor: Colors.cardBorder,
+    backgroundColor: Colors.bgSecondary, borderWidth: 1, borderColor: Colors.border,
     alignItems: 'center', justifyContent: 'center', position: 'relative',
   },
   bellBadge: {
     position: 'absolute', top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8,
-    backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: Colors.error, alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: 3,
   },
   bellBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
 
   errorContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  errorTitle: { color: Colors.textSecondary, fontSize: 16 },
+  errorTitle: { color: Colors.textSecondary, fontSize: 16, fontFamily: 'DMSans_400Regular' },
   retryBtn: {
-    backgroundColor: Colors.limeDim, borderRadius: Radius.pill,
+    backgroundColor: Colors.goldDim, borderRadius: Radius.pill,
     paddingHorizontal: 20, paddingVertical: 8,
-    borderWidth: 1, borderColor: Colors.lime + '40',
+    borderWidth: 1, borderColor: Colors.gold + '40',
   },
-  retryText: { color: Colors.lime, fontSize: 13, fontWeight: '700' },
+  retryText: { color: Colors.gold, fontSize: 13, fontFamily: 'DMSans_500Medium' },
 
   scroll: { paddingHorizontal: 0 },
 
   heroCard: {
     marginHorizontal: Spacing.md, marginBottom: 16,
     borderRadius: Radius.xl, padding: 20,
-    borderWidth: 1, borderColor: Colors.lime + '20', overflow: 'hidden',
+    borderWidth: 1, borderColor: Colors.border, overflow: 'hidden',
   },
   heroGlow: {
     position: 'absolute', top: -40, right: -40, width: 150, height: 150,
-    borderRadius: 75, backgroundColor: Colors.lime, opacity: 0.06,
+    borderRadius: 75, backgroundColor: Colors.gold, opacity: 0.05,
   },
   heroTop: { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
   heroInfo: { flex: 1, gap: 6 },
-  heroName: { color: Colors.textPrimary, fontSize: 20, fontWeight: '800' },
-  roleBadge: { alignSelf: 'flex-start', borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 1 },
-  roleText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+  heroName: { color: Colors.textPrimary, fontSize: 18, fontFamily: 'DMSans_500Medium' },
+  roleBadge: { alignSelf: 'flex-start', borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 1 },
+  roleText: { fontSize: 11, fontFamily: 'DMSans_500Medium', letterSpacing: 0.5 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  metaText: { color: Colors.textMuted, fontSize: 12 },
-  bio: { color: Colors.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 14 },
+  metaText: { color: Colors.textMuted, fontSize: 12, fontFamily: 'DMSans_400Regular' },
+  bio: { color: Colors.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 14, fontFamily: 'DMSans_400Regular' },
 
-  followRow: { flexDirection: 'row', alignItems: 'center', marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: Colors.cardBorder },
+  followRow: { flexDirection: 'row', alignItems: 'center', marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: Colors.border },
   followStat: { flex: 1, alignItems: 'center' },
-  followCount: { color: Colors.textPrimary, fontSize: 18, fontWeight: '800' },
-  followLabel: { color: Colors.textMuted, fontSize: 11, fontWeight: '600', letterSpacing: 0.5, marginTop: 2 },
-  followDivider: { width: 1, height: 32, backgroundColor: Colors.cardBorder },
+  followCount: { color: Colors.textPrimary, fontSize: 20, fontFamily: 'DMMono_400Regular' },
+  followLabel: { color: Colors.textMuted, fontSize: 10, fontFamily: 'DMSans_500Medium', letterSpacing: 1, textTransform: 'uppercase', marginTop: 2 },
+  followDivider: { width: 1, height: 32, backgroundColor: Colors.border },
 
   hcpRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: Colors.cardBorder,
+    marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: Colors.border,
   },
   hcpLeft: { flex: 1 },
-  hcpValue: { color: Colors.lime, fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
+  hcpValue: { color: Colors.gold, fontSize: 26, fontFamily: 'DMMono_400Regular', letterSpacing: -0.5 },
   hcpBtn: {
     paddingHorizontal: 14, paddingVertical: 7,
     borderRadius: Radius.pill,
-    backgroundColor: Colors.limeDim,
-    borderWidth: 1, borderColor: Colors.lime + '50',
+    backgroundColor: Colors.goldDim,
+    borderWidth: 1, borderColor: Colors.gold + '50',
     minWidth: 80, alignItems: 'center', justifyContent: 'center',
   },
-  hcpBtnText: { color: Colors.lime, fontSize: 13, fontWeight: '700' },
+  hcpBtnText: { color: Colors.gold, fontSize: 13, fontFamily: 'DMSans_500Medium' },
 
-  heroStats: { flexDirection: 'row', marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: Colors.cardBorder },
+  heroStats: { flexDirection: 'row', marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: Colors.border },
   heroStat: { flex: 1, alignItems: 'center' },
-  heroStatValue: { fontSize: 20, fontWeight: '800' },
-  heroStatLabel: { color: Colors.textMuted, fontSize: 10, fontWeight: '600', letterSpacing: 0.5, marginTop: 3 },
+  heroStatValue: { fontSize: 20, fontFamily: 'DMMono_400Regular' },
+  heroStatLabel: { color: Colors.textMuted, fontSize: 10, fontFamily: 'DMSans_500Medium', letterSpacing: 1, marginTop: 3, textTransform: 'uppercase' },
 
   highlightsRow: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: Spacing.md, marginBottom: 20 },
   highlightItem: { alignItems: 'center', gap: 4 },
   highlightCircle: {
     width: 58, height: 58, borderRadius: 29,
-    backgroundColor: Colors.bgSecondary, borderWidth: 2, borderColor: Colors.lime + '40',
+    backgroundColor: Colors.bgSecondary, borderWidth: 2, borderColor: Colors.border,
     alignItems: 'center', justifyContent: 'center',
   },
-  highlightValue: { color: Colors.textPrimary, fontSize: 15, fontWeight: '700' },
-  highlightLabel: { color: Colors.textMuted, fontSize: 10 },
+  highlightValue: { color: Colors.textPrimary, fontSize: 15, fontFamily: 'DMMono_400Regular' },
+  highlightLabel: { color: Colors.textMuted, fontSize: 10, fontFamily: 'DMSans_400Regular' },
 
   tabToggle: {
     flexDirection: 'row',
-    borderTopWidth: 1, borderBottomWidth: 1, borderColor: Colors.cardBorder,
+    borderTopWidth: 1, borderBottomWidth: 1, borderColor: Colors.border,
     marginBottom: 2,
   },
   tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 12 },
-  tabBtnActive: { borderBottomWidth: 2, borderBottomColor: Colors.lime },
+  tabBtnActive: { borderBottomWidth: 2, borderBottomColor: Colors.gold },
 
   // Posts grid
   gridWrap: { flexDirection: 'row', flexWrap: 'wrap' },
@@ -578,34 +586,34 @@ const styles = StyleSheet.create({
     flex: 1, backgroundColor: Colors.bgSecondary,
     alignItems: 'center', justifyContent: 'center', padding: 8,
   },
-  gridText: { color: Colors.textSecondary, fontSize: 11, textAlign: 'center', lineHeight: 15 },
+  gridText: { color: Colors.textSecondary, fontSize: 11, textAlign: 'center', lineHeight: 15, fontFamily: 'DMSans_400Regular' },
 
   // Rounds
   roundsSection: { gap: 8, paddingHorizontal: Spacing.md, marginTop: 8, paddingBottom: 20 },
   roundCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   roundLeft: {},
-  roundEvent: { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
-  roundDate: { color: Colors.textMuted, fontSize: 12, marginTop: 2 },
+  roundEvent: { color: Colors.textPrimary, fontSize: 14, fontFamily: 'DMSans_500Medium' },
+  roundDate: { color: Colors.textMuted, fontSize: 12, marginTop: 2, fontFamily: 'DMSans_400Regular' },
   roundRight: { alignItems: 'flex-end' },
-  roundGross: { color: Colors.lime, fontSize: 18, fontWeight: '800' },
-  roundNet: { color: Colors.textMuted, fontSize: 12 },
+  roundGross: { color: Colors.gold, fontSize: 18, fontFamily: 'DMMono_400Regular' },
+  roundNet: { color: Colors.textMuted, fontSize: 12, fontFamily: 'DMSans_400Regular' },
 
   // Stats
   statsSection: { gap: 8, paddingHorizontal: Spacing.md, marginTop: 8, paddingBottom: 20 },
   statCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  statLabel: { color: Colors.textSecondary, fontSize: 14, flex: 1 },
-  statValue: { fontSize: 22, fontWeight: '800' },
+  statLabel: { color: Colors.textSecondary, fontSize: 14, flex: 1, fontFamily: 'DMSans_400Regular' },
+  statValue: { fontSize: 22, fontFamily: 'DMMono_400Regular' },
 
   // Empty
   emptyState: { alignItems: 'center', paddingTop: 40, gap: 10, width: '100%' },
-  emptyText: { color: Colors.textSecondary, fontSize: 15 },
+  emptyText: { color: Colors.textSecondary, fontSize: 15, fontFamily: 'DMSans_400Regular' },
 
   // Avatar wrapper + camera badge
   avatarWrapper: { position: 'relative' },
   cameraBadge: {
     position: 'absolute', bottom: 0, right: 0,
     width: 26, height: 26, borderRadius: 13,
-    backgroundColor: Colors.lime, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: Colors.gold, alignItems: 'center', justifyContent: 'center',
     borderWidth: 2, borderColor: Colors.bg,
   },
 
@@ -618,20 +626,20 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%', backgroundColor: Colors.bgSecondary,
     borderRadius: Radius.xl, padding: 24,
-    borderWidth: 1, borderColor: Colors.cardBorder,
+    borderWidth: 1, borderColor: Colors.border,
   },
-  modalTitle: { color: Colors.textPrimary, fontSize: 18, fontWeight: '800', marginBottom: 20 },
-  modalLabel: { color: Colors.textSecondary, fontSize: 12, fontWeight: '600', letterSpacing: 0.5, marginBottom: 6 },
+  modalTitle: { color: Colors.textPrimary, fontSize: 18, fontFamily: 'CormorantGaramond_600SemiBold', marginBottom: 20 },
+  modalLabel: { color: Colors.textSecondary, fontSize: 12, fontFamily: 'DMSans_500Medium', letterSpacing: 0.5, marginBottom: 6 },
   modalInput: {
     backgroundColor: Colors.bgTertiary, borderRadius: Radius.md,
-    borderWidth: 1, borderColor: Colors.cardBorder,
+    borderWidth: 1, borderColor: Colors.border,
     color: Colors.textPrimary, fontSize: 15, paddingHorizontal: 14, paddingVertical: 11,
-    marginBottom: 16,
+    marginBottom: 16, fontFamily: 'DMSans_400Regular',
   },
   modalActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
   modalBtn: { flex: 1, height: 44, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
-  modalBtnCancel: { backgroundColor: Colors.bgTertiary, borderWidth: 1, borderColor: Colors.cardBorder },
-  modalBtnCancelText: { color: Colors.textSecondary, fontSize: 14, fontWeight: '700' },
-  modalBtnSave: { backgroundColor: Colors.lime },
-  modalBtnSaveText: { color: Colors.bg, fontSize: 14, fontWeight: '800' },
+  modalBtnCancel: { backgroundColor: Colors.bgTertiary, borderWidth: 1, borderColor: Colors.border },
+  modalBtnCancelText: { color: Colors.textSecondary, fontSize: 14, fontFamily: 'DMSans_500Medium' },
+  modalBtnSave: { backgroundColor: Colors.gold },
+  modalBtnSaveText: { color: Colors.bg, fontSize: 14, fontFamily: 'DMSans_500Medium' },
 });

@@ -1,33 +1,36 @@
 import sgMail from '@sendgrid/mail';
 
+const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || 'noreply@thecaddy.app';
+
 if (process.env.SENDGRID_API_KEY) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 }
 
-export async function sendOTPEmail(email: string, code: string): Promise<void> {
+export async function sendOtpEmail(email: string, otp: string): Promise<void> {
+  console.log(`[DEV] OTP for ${email}: ${otp}`);
+
   if (!process.env.SENDGRID_API_KEY) {
-    console.log(`[DEV] OTP for ${email}: ${code}`);
+    console.warn('[Email] SENDGRID_API_KEY not set — OTP logged to console only');
     return;
   }
 
-  const from = process.env.SENDGRID_FROM_EMAIL || 'noreply@thecaddy.app';
-
   await sgMail.send({
     to: email,
-    from: { email: from, name: 'The Caddy' },
-    subject: `Your The Caddy login code: ${code}`,
+    from: FROM_EMAIL,
+    subject: 'Your Caddy verification code',
     html: `
-      <div style="font-family: Georgia, serif; max-width: 480px; margin: 0 auto; background: #111; padding: 40px; border-radius: 12px;">
-        <h1 style="color: #C9F31D; font-size: 28px; margin: 0 0 8px;">The Caddy</h1>
-        <p style="color: #aaa; font-size: 14px; margin: 0 0 32px;">Your golf social platform</p>
-        <div style="background: #1a1a1a; border: 1px solid #C9F31D; border-radius: 8px; padding: 32px; text-align: center;">
-          <p style="color: #ccc; margin: 0 0 16px; font-size: 14px;">Your one-time login code</p>
-          <p style="color: #C9F31D; font-size: 48px; font-weight: bold; letter-spacing: 14px; margin: 0;">${code}</p>
-          <p style="color: #666; font-size: 12px; margin: 16px 0 0;">Expires in 10 minutes</p>
+      <div style="background:#080C14;padding:40px;font-family:sans-serif;max-width:480px;margin:0 auto;border-radius:12px;border:1px solid rgba(212,168,67,0.2)">
+        <h1 style="color:#D4A843;font-size:24px;margin-bottom:8px;letter-spacing:2px">THE CADDY</h1>
+        <p style="color:#8A8FA8;margin-bottom:32px">Your game. Your people.</p>
+        <p style="color:#F4EFE6;font-size:16px;margin-bottom:16px">Your verification code:</p>
+        <div style="background:#1E2640;border-radius:12px;padding:24px;text-align:center;margin-bottom:32px;border:1px solid rgba(212,168,67,0.3)">
+          <span style="font-family:monospace;font-size:40px;letter-spacing:12px;color:#D4A843;font-weight:700">${otp}</span>
         </div>
-        <p style="color: #555; font-size: 12px; margin: 24px 0 0; text-align: center;">If you didn't request this, you can safely ignore this email.</p>
+        <p style="color:#8A8FA8;font-size:13px">This code expires in 10 minutes. Do not share it.</p>
       </div>
     `,
-    text: `Your The Caddy login code is: ${code}\n\nThis code expires in 10 minutes.`,
   });
 }
+
+// Keep backward-compatible alias
+export const sendOTPEmail = sendOtpEmail;

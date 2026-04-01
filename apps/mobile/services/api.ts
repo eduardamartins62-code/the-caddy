@@ -30,8 +30,8 @@ async function request<T>(
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
 export const authApi = {
-  requestOtp: (email?: string, phone?: string) =>
-    request('/auth/request-otp', { method: 'POST', body: JSON.stringify({ email, phone }) }),
+  requestOtp: (email?: string, phone?: string, inviteCode?: string) =>
+    request('/auth/request-otp', { method: 'POST', body: JSON.stringify({ email, phone, ...(inviteCode ? { inviteCode } : {}) }) }),
   verifyOtp: (contact: string, code: string, via: 'email' | 'phone' = 'email') =>
     request<{ token: string; user: import('@the-caddy/shared').User }>('/auth/verify-otp', {
       method: 'POST',
@@ -218,4 +218,46 @@ export const messagesApi = {
   // legacy compat
   getOrCreateWith: (userId: string) =>
     request<{ conversationId: string; messages: any[] }>(`/messages/with/${userId}`),
+};
+
+// ─── Badges ──────────────────────────────────────────────────────────────────
+
+export const badgesApi = {
+  getForUser: (userId: string) => request(`/badges/${userId}`),
+};
+
+// ─── Reviews ─────────────────────────────────────────────────────────────────
+
+export const reviewsApi = {
+  getCourseReviews: (courseId: string) => request(`/reviews/course/${courseId}`),
+  submitReview: (courseId: string, data: any) => request(`/reviews/course/${courseId}`, { method: 'POST', body: JSON.stringify(data) }),
+};
+
+// ─── Feed ─────────────────────────────────────────────────────────────────────
+
+export const feedApi = {
+  getActivity: () => request('/feed/activity'),
+};
+
+// ─── Templates ───────────────────────────────────────────────────────────────
+
+export const templatesApi = {
+  list: () => request('/templates'),
+  create: (data: any) => request('/templates', { method: 'POST', body: JSON.stringify(data) }),
+  use: (id: string) => request(`/templates/${id}/use`, { method: 'POST' }),
+};
+
+// ─── Skins ───────────────────────────────────────────────────────────────────
+
+export const skinsApi = {
+  get: (roundId: string) => request(`/skins/round/${roundId}`),
+  create: (roundId: string, data: any) => request(`/skins/round/${roundId}`, { method: 'POST', body: JSON.stringify(data) }),
+};
+
+// ─── Invite ──────────────────────────────────────────────────────────────────
+
+export const inviteApi = {
+  validate: (code: string) => request('/invite/validate', { method: 'POST', body: JSON.stringify({ code }) }),
+  getStatus: () => request('/invite/status'),
+  joinWaitlist: (email: string) => request('/invite/waitlist', { method: 'POST', body: JSON.stringify({ email }) }),
 };

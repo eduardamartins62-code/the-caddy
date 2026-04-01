@@ -175,7 +175,7 @@ export default function FriendsScreen() {
           onPress={() => router.back()}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <ArrowLeft size={22} color={Colors.textPrimary} strokeWidth={2} />
+          <ArrowLeft size={22} stroke={Colors.textPrimary} strokeWidth={2} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Friends</Text>
 
@@ -184,7 +184,7 @@ export default function FriendsScreen() {
             style={styles.qrBtn}
             onPress={() => Alert.alert('Coming Soon', 'QR sharing coming soon')}
           >
-            <QrCode size={20} color={Colors.textSecondary} strokeWidth={2} />
+            <QrCode size={20} stroke={Colors.textSecondary} strokeWidth={2} />
           </TouchableOpacity>
         )}
         {activeTab !== 'add' && <View style={styles.qrBtn} />}
@@ -259,7 +259,7 @@ export default function FriendsScreen() {
                 {/* Local search */}
                 {friends.length > 0 && (
                   <View style={styles.searchInputWrap}>
-                    <Search size={15} color={Colors.textSecondary} strokeWidth={2} />
+                    <Search size={15} stroke={Colors.textSecondary} strokeWidth={2} />
                     <TextInput
                       style={styles.searchInput}
                       placeholder="Search by Name"
@@ -274,7 +274,7 @@ export default function FriendsScreen() {
 
                 {filteredFriends.length === 0 && friends.length === 0 ? (
                   <View style={styles.centeredState}>
-                    <Users size={36} color={Colors.textMuted} strokeWidth={1.5} />
+                    <Users size={36} stroke={Colors.textMuted} strokeWidth={1.5} />
                     <Text style={styles.emptyText}>No friends yet</Text>
                     <Text style={styles.emptySubtext}>Switch to Add Friends to find people</Text>
                   </View>
@@ -295,7 +295,7 @@ export default function FriendsScreen() {
                         </View>
                         <ArrowLeft
                           size={16}
-                          color={Colors.textMuted}
+                          stroke={Colors.textMuted}
                           strokeWidth={2}
                           style={{ transform: [{ rotate: '180deg' }] }}
                         />
@@ -314,7 +314,7 @@ export default function FriendsScreen() {
         <View style={styles.addTabContent}>
           {/* Search input */}
           <View style={[styles.searchInputWrap, styles.addSearchWrap]}>
-            <Search size={15} color={Colors.textSecondary} strokeWidth={2} />
+            <Search size={15} stroke={Colors.textSecondary} strokeWidth={2} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search by name or username"
@@ -341,7 +341,7 @@ export default function FriendsScreen() {
 
             {!searchLoading && searchQuery.length < 2 && (
               <View style={styles.centeredState}>
-                <UserPlus size={36} color={Colors.textMuted} strokeWidth={1.5} />
+                <UserPlus size={36} stroke={Colors.textMuted} strokeWidth={1.5} />
                 <Text style={styles.emptyText}>Find your friends</Text>
                 <Text style={styles.emptySubtext}>Search by name or username</Text>
               </View>
@@ -374,7 +374,7 @@ export default function FriendsScreen() {
                   >
                     {isFollowing ? (
                       <>
-                        <Check size={13} color={Colors.lime} strokeWidth={2.5} />
+                        <Check size={13} stroke={Colors.lime} strokeWidth={2.5} />
                         <Text style={styles.followBtnTextActive}>Following</Text>
                       </>
                     ) : (

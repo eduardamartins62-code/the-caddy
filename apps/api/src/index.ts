@@ -18,6 +18,12 @@ import courseRoutes       from './routes/courses';
 import notificationRoutes from './routes/notifications';
 import messageRoutes      from './routes/messages';
 import adminRoutes        from './routes/admin';
+import templateRoutes     from './routes/templates';
+import skinsRoutes        from './routes/skins';
+import badgeRoutes        from './routes/badges';
+import inviteRoutes       from './routes/invite';
+import feedRoutes         from './routes/feed';
+import reviewRoutes       from './routes/reviews';
 
 dotenv.config();
 
@@ -41,23 +47,28 @@ setupSocketHandlers(io);
 // ─── Security Middleware ──────────────────────────────────────────────────────
 
 app.use(helmet());
-app.use(cors({ origin: process.env.CLIENT_URL || '*', credentials: true }));
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production'
+    ? [process.env.ALLOWED_ORIGIN || 'https://the-caddy-production.up.railway.app']
+    : '*',
+  credentials: true,
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Auth route rate limiter: max 10 requests per 15 minutes per IP
+// OTP rate limiter: max 5 requests per 15 minutes per IP
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max:      10,
+  max:      5,
   standardHeaders: true,
   legacyHeaders:   false,
   message: { error: 'Too many requests, please try again later.' },
 });
 
-// General rate limiter: max 100 requests per minute per IP
+// General rate limiter: max 200 requests per minute per IP
 const generalLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max:      100,
+  max:      200,
   standardHeaders: true,
   legacyHeaders:   false,
   message: { error: 'Too many requests, please try again later.' },
@@ -80,6 +91,12 @@ app.use('/api/courses',       courseRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/messages',      messageRoutes);
 app.use('/api/admin',         adminRoutes);
+app.use('/api/templates',     templateRoutes);
+app.use('/api/skins',         skinsRoutes);
+app.use('/api/badges',        badgeRoutes);
+app.use('/api/invite',        inviteRoutes);
+app.use('/api/feed',          feedRoutes);
+app.use('/api/reviews',       reviewRoutes);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 

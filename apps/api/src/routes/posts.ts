@@ -7,7 +7,7 @@ const router = Router();
 
 const userSelect = { id: true, name: true, username: true, avatar: true };
 
-// GET /api/posts?feed=friends|discover
+// GET /api/posts?feed=friends|discover|local
 router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   const feed  = (req.query.feed as string) || 'discover';
   const limit = 20;
@@ -21,6 +21,16 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     });
     const followingIds = follows.map(f => f.followingId);
     where = { userId: { in: followingIds } };
+  } else if (feed === 'local') {
+    // Get current user's location to find nearby posts
+    const me = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { location: true },
+    });
+    if (me?.location) {
+      where = { location: { contains: me.location } };
+    }
+    // fallback: no filter if no location set
   }
 
   const posts = await prisma.socialPost.findMany({
@@ -87,6 +97,18 @@ router.post('/:id/like', authenticate, async (req: AuthRequest, res: Response) =
   } else {
     await prisma.postLike.create({ data: { postId: id, userId } });
     const post = await prisma.socialPost.update({ where: { id }, data: { likes: { increment: 1 } } });
+    // Create notification for post owner (don't notify yourself)
+    if (post.userId !== userId) {
+      await prisma.notification.create({
+        data: {
+          userId: post.userId,
+          type: 'LIKE',
+          title: 'New like',
+          body: 'Someone liked your post',
+          data: JSON.stringify({ postId: id }),
+        },
+      }).catch(() => {});
+    }
     res.json({ data: { liked: true, likes: post.likes } });
   }
 });
@@ -139,6 +161,19 @@ router.post('/:id/comments', authenticate, async (req: AuthRequest, res: Respons
     },
     include: { user: { select: userSelect } },
   });
+
+  // Create notification for post owner (don't notify yourself)
+  if (post.userId !== req.user!.id) {
+    await prisma.notification.create({
+      data: {
+        userId: post.userId,
+        type: 'COMMENT',
+        title: 'New comment',
+        body: `${comment.user.name} commented on your post`,
+        data: JSON.stringify({ postId: req.params.id, commentId: comment.id }),
+      },
+    }).catch(() => {});
+  }
 
   res.status(201).json({ data: comment });
 });

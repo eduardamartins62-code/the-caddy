@@ -1,70 +1,90 @@
-// ─── THE CADDY — Modern Luxury Golf Design System ─────────────────────────────
-
 export const Colors = {
   // Backgrounds
-  bg:          '#0A0A0F',
-  bgSecondary: '#13131A',
-  bgTertiary:  '#1C1C27',
+  bg:           '#080C14',
+  bgSecondary:  '#0F1420',
+  bgTertiary:   '#161D2E',
+  bgElevated:   '#1E2640',
 
-  // Accents
-  lime:        '#C9F31D',
-  purple:      '#7B61FF',
-  limeDim:     'rgba(201,243,29,0.15)',
-  purpleDim:   'rgba(123,97,255,0.15)',
-  limeGlow:    'rgba(201,243,29,0.25)',
-  purpleGlow:  'rgba(123,97,255,0.25)',
+  // Primary accent — champagne gold
+  gold:         '#D4A843',
+  goldMuted:    '#8B6F2E',
+  goldLight:    '#F0C866',
+  goldDim:      'rgba(212,168,67,0.15)',
+  goldGlow:     'rgba(212,168,67,0.25)',
+
+  // Secondary accent — electric teal
+  teal:         '#00C9A7',
+  tealMuted:    '#007A65',
+  tealDim:      'rgba(0,201,167,0.15)',
 
   // Text
-  textPrimary:   '#FFFFFF',
-  textSecondary: '#8A8A9A',
-  textMuted:     '#4A4A5A',
-
-  // Cards & Borders
-  card:            '#13131A',
-  cardBorder:      'rgba(255,255,255,0.06)',
-  cardBorderActive: 'rgba(201,243,29,0.2)',
-  glass:           'rgba(19,19,26,0.8)',
-  glassBorder:     'rgba(255,255,255,0.08)',
-
-  // Semantic
-  success: '#22C55E',
-  error:   '#EF4444',
-  warning: '#F59E0B',
-  orange:  '#F97316',
+  textPrimary:   '#F4EFE6',
+  textSecondary: '#8A8FA8',
+  textMuted:     '#3D4460',
 
   // Score colors
-  eagle:       '#7B61FF',
-  birdie:      '#C9F31D',
-  par:         '#FFFFFF',
-  bogey:       '#F97316',
-  doubleBogey: '#EF4444',
+  scoreEagle:   '#00C9A7',
+  scoreBirdie:  '#D4A843',
+  scorePar:     '#F4EFE6',
+  scoreBogey:   '#C17B2E',
+  scoreDouble:  '#C44B4B',
 
-  // Overlay
-  overlay: 'rgba(10,10,15,0.85)',
+  // Functional
+  success:  '#2DD4A0',
+  error:    '#C44B4B',
+  warning:  '#C17B2E',
 
-  // Legacy aliases (keep screens still being migrated working)
-  gold:     '#C9F31D',
-  goldDim:  'rgba(201,243,29,0.15)',
-  surface:  '#0A0A0F',
-  offWhite: '#FFFFFF',
-  white:    '#FFFFFF',
-  gray100:  '#2A2A35',
-  gray300:  '#6A6A7A',
-  gray500:  '#8A8A9A',
-  gray700:  '#1C1C27',
-  black:    '#000000',
-  green:    '#0A0A0F',
-  greenDark:'#0A0A0F',
-  info:     '#7B61FF',
+  // Borders
+  border:       'rgba(212,168,67,0.12)',
+  borderStrong: 'rgba(212,168,67,0.30)',
+
+  // Legacy aliases (keep for backward compat, map to new values)
+  lime:         '#D4A843',
+  limeDim:      'rgba(212,168,67,0.15)',
+  limeGlow:     'rgba(212,168,67,0.25)',
+  purple:       '#00C9A7',
+  purpleDim:    'rgba(0,201,167,0.15)',
+  purpleGlow:   'rgba(0,201,167,0.25)',
+  card:         '#0F1420',
+  cardBorder:   'rgba(212,168,67,0.12)',
+  cardBorderActive: 'rgba(212,168,67,0.30)',
+  glass:        'rgba(15,20,32,0.8)',
+  glassBorder:  'rgba(212,168,67,0.10)',
+  orange:       '#C17B2E',
+
+  // More legacy aliases
+  overlay:    'rgba(8,12,20,0.85)',
+  surface:    '#080C14',
+  offWhite:   '#F4EFE6',
+  white:      '#F4EFE6',
+  gray100:    '#1E2640',
+  gray300:    '#3D4460',
+  gray500:    '#8A8FA8',
+  gray700:    '#161D2E',
+  black:      '#000000',
+  green:      '#2DD4A0',
+  greenDark:  '#007A65',
+  info:       '#00C9A7',
+
+  // Score legacy
+  eagle:       '#00C9A7',
+  birdie:      '#D4A843',
+  par:         '#F4EFE6',
+  bogey:       '#C17B2E',
+  doubleBogey: '#C44B4B',
 };
 
 export const Gradients = {
-  accent:      ['#C9F31D', '#7B61FF'] as const,
-  hero:        ['#1A1A2E', '#0A0A0F'] as const,
-  limeAlpha:   ['rgba(201,243,29,0.3)', 'rgba(201,243,29,0)'] as const,
-  purpleAlpha: ['rgba(123,97,255,0.3)', 'rgba(123,97,255,0)'] as const,
-  card:        ['rgba(28,28,39,0.9)', 'rgba(19,19,26,0.95)'] as const,
-  darkOverlay: ['rgba(10,10,15,0)', 'rgba(10,10,15,0.95)'] as const,
+  gold:        ['#F0C866', '#C4912A'] as const,
+  hero:        ['#1A2340', '#080C14'] as const,
+  cardOverlay: ['transparent', 'rgba(8,12,20,0.92)'] as const,
+  card:        ['#0F1420', '#080C14'] as const,
+  teal:        ['#00C9A7', '#007A65'] as const,
+  // Legacy
+  accent:      ['#F0C866', '#C4912A'] as const,
+  limeAlpha:   ['rgba(212,168,67,0.3)', 'rgba(212,168,67,0)'] as const,
+  purpleAlpha: ['rgba(0,201,167,0.3)', 'rgba(0,201,167,0)'] as const,
+  darkOverlay: ['rgba(8,12,20,0)', 'rgba(8,12,20,0.95)'] as const,
 };
 
 export const Spacing = {
@@ -88,25 +108,59 @@ export const Radius = {
 };
 
 export const Typography = {
+  hero:    { fontSize: 36, letterSpacing: -0.5, fontWeight: '700' as const },
+  h1:      { fontSize: 28, letterSpacing: -0.3, fontWeight: '600' as const },
+  h2:      { fontSize: 22, fontWeight: '600' as const },
+  h3:      { fontSize: 18, fontWeight: '500' as const },
+  body:    { fontSize: 15, lineHeight: 22, fontWeight: '400' as const },
+  caption: { fontSize: 12, fontWeight: '400' as const },
+  label:   { fontSize: 11, letterSpacing: 1.5, fontWeight: '500' as const, textTransform: 'uppercase' as const },
+  stat:    { fontSize: 24, letterSpacing: -0.5, fontWeight: '700' as const },
+  score:   { fontSize: 16, fontWeight: '500' as const },
+  // legacy numeric aliases
   xs:   11,
   sm:   13,
   md:   15,
   lg:   18,
   xl:   22,
   xxl:  28,
-  hero: 36,
 };
 
+export const Shadows = {
+  gold: {
+    shadowColor: '#D4A843',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  teal: {
+    shadowColor: '#00C9A7',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  card: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+};
+
+// Legacy alias
 export const Shadow = {
   lime: {
-    shadowColor: '#C9F31D',
+    shadowColor: '#D4A843',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 16,
     elevation: 10,
   },
   purple: {
-    shadowColor: '#7B61FF',
+    shadowColor: '#00C9A7',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 16,
@@ -119,9 +173,8 @@ export const Shadow = {
     shadowRadius: 20,
     elevation: 12,
   },
-  // legacy
   gold: {
-    shadowColor: '#C9F31D',
+    shadowColor: '#D4A843',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 16,
@@ -129,9 +182,8 @@ export const Shadow = {
   },
 };
 
-// legacy alias
 export const Fonts = {
-  serif:     'System',
-  sansSerif: 'System',
-  mono:      'Courier',
+  serif:     'CormorantGaramond_600SemiBold',
+  sansSerif: 'DMSans_400Regular',
+  mono:      'DMMono_400Regular',
 };

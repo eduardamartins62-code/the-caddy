@@ -76,8 +76,8 @@ export default function OnboardingScreen() {
     // Step 0 — Welcome
     <View key="welcome" style={styles.stepContent}>
       <View style={styles.stepIcon}>
-        <LinearGradient colors={[Colors.lime, Colors.purple]} style={styles.stepIconGrad}>
-          <User size={32} color={Colors.bg} strokeWidth={2} />
+        <LinearGradient colors={['#F0C866', '#C4912A']} style={styles.stepIconGrad}>
+          <User size={32} stroke={Colors.bg} strokeWidth={2} />
         </LinearGradient>
       </View>
       <Text style={styles.stepHeading}>Welcome to{'\n'}The Caddy</Text>
@@ -91,7 +91,7 @@ export default function OnboardingScreen() {
     <View key="name" style={styles.stepContent}>
       <View style={styles.stepIcon}>
         <View style={[styles.stepIconPlain, { backgroundColor: Colors.lime + '20' }]}>
-          <User size={28} color={Colors.lime} strokeWidth={1.8} />
+          <User size={28} stroke={Colors.lime} strokeWidth={1.8} />
         </View>
       </View>
       <Text style={styles.stepHeading}>What's your name?</Text>
@@ -118,7 +118,7 @@ export default function OnboardingScreen() {
     <ScrollView key="handicap" contentContainerStyle={styles.stepContent} keyboardShouldPersistTaps="handled">
       <View style={styles.stepIcon}>
         <View style={[styles.stepIconPlain, { backgroundColor: Colors.purple + '20' }]}>
-          <TrendingUp size={28} color={Colors.purple} strokeWidth={1.8} />
+          <TrendingUp size={28} stroke={Colors.purple} strokeWidth={1.8} />
         </View>
       </View>
       <Text style={styles.stepHeading}>What's your handicap?</Text>
@@ -154,7 +154,7 @@ export default function OnboardingScreen() {
         onPress={() => { setNoHandicap(v => !v); setHandicap(''); }}
       >
         <View style={[styles.checkbox, noHandicap && styles.checkboxChecked]}>
-          {noHandicap && <Check size={12} color={Colors.bg} strokeWidth={3} />}
+          {noHandicap && <Check size={12} stroke={Colors.bg} strokeWidth={3} />}
         </View>
         <Text style={styles.checkLabel}>I don't have an official handicap</Text>
       </TouchableOpacity>
@@ -169,7 +169,7 @@ export default function OnboardingScreen() {
     <View key="course" style={styles.stepContent}>
       <View style={styles.stepIcon}>
         <View style={[styles.stepIconPlain, { backgroundColor: Colors.lime + '20' }]}>
-          <Flag size={28} color={Colors.lime} strokeWidth={1.8} />
+          <Flag size={28} stroke={Colors.lime} strokeWidth={1.8} />
         </View>
       </View>
       <Text style={styles.stepHeading}>Where do you play most?</Text>
@@ -194,7 +194,7 @@ export default function OnboardingScreen() {
     <ScrollView key="bio" contentContainerStyle={styles.stepContent} keyboardShouldPersistTaps="handled">
       <View style={styles.stepIcon}>
         <View style={[styles.stepIconPlain, { backgroundColor: Colors.purple + '20' }]}>
-          <FileText size={28} color={Colors.purple} strokeWidth={1.8} />
+          <FileText size={28} stroke={Colors.purple} strokeWidth={1.8} />
         </View>
       </View>
       <Text style={styles.stepHeading}>Last bit — about you</Text>
@@ -245,7 +245,7 @@ export default function OnboardingScreen() {
           {step > 1 && (
             <TouchableOpacity onPress={back} style={styles.backArrow}>
               <ChevronRight
-                size={20} color={Colors.textSecondary}
+                size={20} stroke={Colors.textSecondary}
                 strokeWidth={2}
                 style={{ transform: [{ rotate: '180deg' }] }}
               />
@@ -267,22 +267,29 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
 
   progressWrap: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: Spacing.md, paddingVertical: 12, gap: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 12,
+    gap: 10,
   },
   backArrow: {
     width: 32, height: 32, borderRadius: 16,
     backgroundColor: Colors.bgSecondary,
     alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: Colors.border,
   },
   progressTrack: {
-    flex: 1, height: 4, borderRadius: 2,
+    flex: 1, height: 3, borderRadius: 2,
     backgroundColor: Colors.bgTertiary, overflow: 'hidden',
   },
   progressFill: {
-    height: '100%', backgroundColor: Colors.lime, borderRadius: 2,
+    height: '100%', backgroundColor: Colors.gold, borderRadius: 2,
   },
-  progressLabel: { color: Colors.textMuted, fontSize: 12, fontWeight: '600', width: 30 },
+  progressLabel: {
+    color: Colors.textMuted, fontSize: 12,
+    fontFamily: 'DMSans_500Medium', width: 30,
+  },
 
   stepContent: {
     flex: 1, padding: Spacing.lg, paddingTop: 32,
@@ -296,28 +303,49 @@ const styles = StyleSheet.create({
   stepIconPlain: {
     width: 72, height: 72, borderRadius: 36,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: Colors.cardBorder,
+    borderWidth: 1, borderColor: Colors.border,
   },
 
   stepHeading: {
-    color: Colors.textPrimary, fontSize: 28, fontWeight: '800',
-    lineHeight: 34, marginBottom: 10,
+    color: Colors.textPrimary,
+    fontSize: 30,
+    fontFamily: 'CormorantGaramond_700Bold',
+    lineHeight: 36,
+    marginBottom: 10,
   },
   stepSub: {
-    color: Colors.textSecondary, fontSize: 15, lineHeight: 22, marginBottom: 4,
+    color: Colors.textSecondary,
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 4,
+    fontFamily: 'DMSans_400Regular',
   },
 
   bigInput: {
-    backgroundColor: Colors.bgSecondary, borderWidth: 1.5,
-    borderColor: Colors.cardBorder, borderRadius: Radius.lg,
-    paddingHorizontal: 16, paddingVertical: 14,
-    color: Colors.textPrimary, fontSize: 16,
+    backgroundColor: Colors.bgSecondary,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    color: Colors.textPrimary,
+    fontSize: 16,
+    fontFamily: 'DMSans_400Regular',
     marginTop: 16,
   },
   bioInput: { height: 90, textAlignVertical: 'top' },
-  charCount: { color: Colors.textMuted, fontSize: 11, textAlign: 'right', marginTop: 4 },
+  charCount: {
+    color: Colors.textMuted, fontSize: 11,
+    textAlign: 'right', marginTop: 4,
+    fontFamily: 'DMSans_400Regular',
+  },
 
-  fieldLabel: { color: Colors.textSecondary, fontSize: 13, fontWeight: '600', marginTop: 4 },
+  fieldLabel: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontFamily: 'DMSans_500Medium',
+    marginTop: 4,
+  },
 
   presetGrid: {
     flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 20,
@@ -325,16 +353,19 @@ const styles = StyleSheet.create({
   preset: {
     paddingHorizontal: 18, paddingVertical: 10,
     borderRadius: Radius.pill, borderWidth: 1.5,
-    borderColor: Colors.cardBorder, backgroundColor: Colors.bgSecondary,
+    borderColor: Colors.border, backgroundColor: Colors.bgTertiary,
   },
   presetActive: {
-    borderColor: Colors.lime, backgroundColor: Colors.limeDim,
+    borderColor: Colors.gold,
+    backgroundColor: Colors.goldDim,
   },
-  presetText: { color: Colors.textSecondary, fontSize: 14, fontWeight: '600' },
-  presetTextActive: { color: Colors.lime },
+  presetText: { color: Colors.textSecondary, fontSize: 14, fontFamily: 'DMSans_500Medium' },
+  presetTextActive: { color: Colors.gold },
 
   orLabel: {
-    color: Colors.textMuted, fontSize: 12, textAlign: 'center',
+    color: Colors.textMuted, fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    textAlign: 'center',
     marginTop: 16, marginBottom: 0,
   },
 
@@ -342,18 +373,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 10,
     marginTop: 16, padding: 12,
     borderRadius: Radius.md, backgroundColor: Colors.bgSecondary,
-    borderWidth: 1, borderColor: Colors.cardBorder,
+    borderWidth: 1, borderColor: Colors.border,
   },
-  checkRowActive: { borderColor: Colors.lime + '60', backgroundColor: Colors.limeDim },
+  checkRowActive: { borderColor: Colors.gold + '60', backgroundColor: Colors.goldDim },
   checkbox: {
     width: 22, height: 22, borderRadius: 6,
-    borderWidth: 1.5, borderColor: Colors.cardBorder,
+    borderWidth: 1.5, borderColor: Colors.border,
     backgroundColor: Colors.bgTertiary,
     alignItems: 'center', justifyContent: 'center',
   },
-  checkboxChecked: { backgroundColor: Colors.lime, borderColor: Colors.lime },
-  checkLabel: { color: Colors.textSecondary, fontSize: 13, flex: 1 },
+  checkboxChecked: { backgroundColor: Colors.gold, borderColor: Colors.gold },
+  checkLabel: { color: Colors.textSecondary, fontSize: 13, flex: 1, fontFamily: 'DMSans_400Regular' },
 
   skipBtn: { alignItems: 'center', paddingVertical: 14 },
-  skipText: { color: Colors.textMuted, fontSize: 13 },
+  skipText: { color: Colors.textMuted, fontSize: 13, fontFamily: 'DMSans_400Regular' },
 });
