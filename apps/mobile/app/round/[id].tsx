@@ -510,7 +510,13 @@ export default function RoundDetailScreen() {
 
   const scoreMap = useMemo(() => {
     const map: Record<number, Record<string, number>> = {};
-    ((scorecard?.scores as any) ?? []).forEach((s: any) => {
+    const raw = scorecard?.scores;
+    if (!raw) return map;
+    // Handles both flat Score[] and legacy Record<userId, Score[]>
+    const flatScores: any[] = Array.isArray(raw)
+      ? raw
+      : Object.values(raw as Record<string, any[]>).flat();
+    flatScores.forEach((s: any) => {
       if (!map[s.holeNumber]) map[s.holeNumber] = {};
       map[s.holeNumber][s.userId] = s.strokes;
     });

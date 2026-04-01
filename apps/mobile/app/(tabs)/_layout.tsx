@@ -148,14 +148,16 @@ function CustomTabBar({ state, navigation }: any) {
 
       <View style={tabBarStyles.row} pointerEvents="box-none">
         {TABS.map((tab, index) => {
-          const focused = state.index === index;
+          // Compare by route name so hidden screens don't break the active state
+          const focused = state.routes[state.index]?.name === tab.name;
 
           const onPress = () => {
             if (tab.isCreate) {
               router.push('/event/create' as any);
               return;
             }
-            const route = state.routes[index];
+            // Look up route by name so hidden screens (leaderboard etc.) don't shift indices
+            const route = state.routes.find((r: any) => r.name === tab.name);
             if (!route) return;
             const event = navigation.emit({
               type: 'tabPress',

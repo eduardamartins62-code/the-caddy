@@ -86,7 +86,10 @@ router.get('/active', authenticate, async (req: AuthRequest, res: Response) => {
 router.get('/:id', async (req, res: Response) => {
   const round = await prisma.round.findUnique({
     where:   { id: req.params.id },
-    include: { holes: { orderBy: { holeNumber: 'asc' } } },
+    include: {
+      holes: { orderBy: { holeNumber: 'asc' } },
+      event: { select: { id: true, name: true } },
+    },
   });
   if (!round) { res.status(404).json({ error: 'Round not found' }); return; }
   res.json({ data: round });
@@ -432,14 +435,16 @@ router.get('/:id/scorecard', async (req, res: Response) => {
   });
   if (!round) { res.status(404).json({ error: 'Round not found' }); return; }
 
-  const scoresByUser: Record<string, typeof round.scores> = {};
-  for (const score of round.scores) {
-    if (!scoresByUser[score.userId]) scoresByUser[score.userId] = [];
-    scoresByUser[score.userId].push(score);
-  }
+  // Return scores as a flat array so the mobile scorecard can iterate directly
+  const flatScores = round.scores;
 
-  const players = round.event.participants.map(p => p.user);
-  res.json({ data: { round, holes: round.holes, scores: scoresByUser, players } });
+  // Players come from event participants (safe fallback if round has no event)
+  const players = round.event?.participants?.map(p => ({
+    ...p.user,
+    userId: p.user.id,
+  })) ?? [];
+
+  res.json({ data: { round, holes: round.holes, scores: flatScores, players } });
 });
 
 export default router;
