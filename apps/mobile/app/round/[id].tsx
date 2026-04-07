@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Modal, RefreshControl, ActivityIndicator, Alert,
+  Modal, RefreshControl, ActivityIndicator, Alert, Switch, TextInput,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,22 +21,22 @@ import { Colors, Radius, Spacing } from '../../constants/theme';
 // ─── Score color helpers (per spec) ──────────────────────────────────────────
 
 function holeScoreBgSolid(strokes: number, par: number): string {
-  if (strokes === 0) return 'transparent';
+  if (strokes === 0) return '#1A2030';
   const rel = strokes - par;
-  if (rel <= -2) return '#FFD700'; // eagle or better — gold
-  if (rel === -1) return '#E8365D'; // birdie — red/pink
-  if (rel === 0)  return '#3A3A4A'; // par — light grey
-  if (rel === 1)  return '#4A90D9'; // bogey — light blue
-  if (rel === 2)  return '#2C5F8A'; // double bogey — dark blue
-  return '#1A1A2E';                 // triple+ — dark brown/dark
+  if (rel <= -2) return '#3B62D9'; // eagle — blue
+  if (rel === -1) return '#C4F135'; // birdie — lime
+  if (rel === 0)  return '#1A2030'; // par — dark navy
+  if (rel === 1)  return '#D4561A'; // bogey — orange
+  if (rel === 2)  return '#9B1C1C'; // double bogey — dark red
+  return '#6B1111';                 // triple+ — darker red
 }
 
 function holeScoreTextColor(strokes: number, par: number): string {
   if (strokes === 0) return Colors.textMuted;
   const rel = strokes - par;
-  if (rel <= -2) return '#1A1A2E'; // dark text on gold
-  if (rel === -1) return '#FFFFFF';
-  if (rel === 0)  return Colors.textPrimary;
+  if (rel <= -2) return '#FFFFFF';
+  if (rel === -1) return '#080C14'; // dark text on lime
+  if (rel === 0)  return Colors.textSecondary;
   return '#FFFFFF';
 }
 
@@ -425,7 +425,7 @@ const betStyles = StyleSheet.create({
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
-type RoundTab = 'scorecard' | 'bets' | 'skins';
+type RoundTab = 'scorecard' | 'skins';
 
 export default function RoundDetailScreen() {
   const { id }   = useLocalSearchParams<{ id: string }>();
@@ -724,6 +724,178 @@ export default function RoundDetailScreen() {
     );
   };
 
+  // ─── Player card scorecard ────────────────────────────────────────────────
+
+  function playerStats(uid: string) {
+    let eagles = 0, birdies = 0, bogeys = 0, doubles = 0;
+    holes.forEach((h) => {
+      const s = scoreMap[h.holeNumber]?.[uid];
+      if (!s) return;
+      const rel = s - (h.par ?? 4);
+      if (rel <= -2) eagles++;
+      else if (rel === -1) birdies++;
+      else if (rel === 1) bogeys++;
+      else if (rel >= 2) doubles++;
+    });
+    return { eagles, birdies, bogeys, doubles };
+  }
+
+  const sortedPlayers = useMemo(() => {
+    return [...players].sort((a, b) => {
+      const ga = playerGross(a.userId ?? a.id);
+      const gb = playerGross(b.userId ?? b.id);
+      if (ga === 0 && gb === 0) return 0;
+      if (ga === 0) return 1;
+      if (gb === 0) return -1;
+      return ga - gb;
+    });
+  }, [players, scoreMap]);
+
+  const RANK_COLORS = ['#C4F135', '#4361B8', '#6B7DB8', '#3D4460'];
+
+  const PlayerCard = ({ player, rank }: { player: any; rank: number }) => {
+    const uid = player.userId ?? player.id;
+    const name = player.user?.name ?? player.name ?? 'Unknown';
+    const nickname = player.user?.nickname ?? player.nickname ?? '';
+    const gross = playerGross(uid);
+    const rel = gross > 0 ? gross - par : null;
+    const { eagles, birdies, bogeys } = playerStats(uid);
+    const rankColor = RANK_COLORS[Math.min(rank - 1, RANK_COLORS.length - 1)];
+    const rankTextColor = rank === 1 ? '#080C14' : '#F4EFE6';
+
+    return (
+      <View style={pcStyles.card}>
+        {/* Top row */}
+        <View style={pcStyles.topRow}>
+          <View style={[pcStyles.rankCircle, { backgroundColor: rankColor }]}>
+            <Text style={[pcStyles.rankText, { color: rankTextColor }]}>{rank}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={pcStyles.playerName}>{name}</Text>
+            {nickname ? <Text style={pcStyles.nickname}>"{nickname}"</Text> : null}
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={pcStyles.scoreRel}>{rel === null ? 'E' : relLabel(rel)}</Text>
+            <Text style={pcStyles.grossText}>{gross > 0 ? `${gross} strokes` : '0 strokes'}</Text>
+          </View>
+        </View>
+
+        {/* Score chips */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={pcStyles.chipsScroll}>
+          <View style={pcStyles.chipsRow}>
+            {holes.map((h) => {
+              const s = scoreMap[h.holeNumber]?.[uid] ?? 0;
+              const bg = holeScoreBgSolid(s, h.par ?? 4);
+              const tc = holeScoreTextColor(s, h.par ?? 4);
+              const isEditable = isAdmin || uid === user?.id;
+              return (
+                <TouchableOpacity
+                  key={h.holeNumber}
+                  style={[pcStyles.chip, { backgroundColor: bg }]}
+                  onPress={() => isEditable && openPad(h.holeNumber, h.par ?? 4, uid, name)}
+                  activeOpacity={isEditable ? 0.7 : 1}
+                >
+                  <Text style={[pcStyles.chipText, { color: tc }]}>{s > 0 ? s : '–'}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
+
+        {/* Stat tags */}
+        {(eagles > 0 || birdies > 0 || bogeys > 0) && (
+          <View style={pcStyles.tagsRow}>
+            {eagles > 0 && (
+              <View style={[pcStyles.tag, { backgroundColor: '#3B62D930' }]}>
+                <View style={[pcStyles.tagDot, { backgroundColor: '#3B62D9' }]} />
+                <Text style={[pcStyles.tagText, { color: '#3B62D9' }]}>{eagles} {eagles === 1 ? 'Eagle' : 'Eagles'}</Text>
+              </View>
+            )}
+            {birdies > 0 && (
+              <View style={[pcStyles.tag, { backgroundColor: '#C4F13520' }]}>
+                <View style={[pcStyles.tagDot, { backgroundColor: '#C4F135' }]} />
+                <Text style={[pcStyles.tagText, { color: '#C4F135' }]}>{birdies} {birdies === 1 ? 'Birdie' : 'Birdies'}</Text>
+              </View>
+            )}
+            {bogeys > 0 && (
+              <View style={[pcStyles.tag, { backgroundColor: '#D4561A20' }]}>
+                <View style={[pcStyles.tagDot, { backgroundColor: '#D4561A' }]} />
+                <Text style={[pcStyles.tagText, { color: '#D4561A' }]}>{bogeys} {bogeys === 1 ? 'Bogey' : 'Bogeys'}</Text>
+              </View>
+            )}
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  // ─── Skins setup component ────────────────────────────────────────────────
+
+  const SkinsSetup = () => {
+    const [stake, setStake] = useState('5');
+    const [carryover, setCarryover] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    async function handleCreate() {
+      setSaving(true);
+      try {
+        const { skinsApi } = await import('../../services/api');
+        await skinsApi.create(id, { betPerHole: parseFloat(stake) || 1, carryover });
+        refetchSkinsGame();
+      } catch (e: any) {
+        Alert.alert('Error', e?.message ?? 'Failed to create skins game');
+      } finally {
+        setSaving(false);
+      }
+    }
+
+    if (skinsGameApiData) {
+      return <SkinsTable skins={skinsGameApiData.holes ?? skinsGameApiData} />;
+    }
+
+    return (
+      <View style={ssStyles.wrap}>
+        <Text style={ssStyles.title}>Set Up Skins Game</Text>
+        <Text style={ssStyles.subtitle}>Configure the skins game for this round</Text>
+        <View style={ssStyles.card}>
+          <View style={ssStyles.row}>
+            <View>
+              <Text style={ssStyles.label}>Stake per hole</Text>
+              <Text style={ssStyles.desc}>Amount wagered each hole</Text>
+            </View>
+            <View style={ssStyles.inputBox}>
+              <Text style={ssStyles.dollar}>$</Text>
+              <TextInput
+                style={ssStyles.input}
+                value={stake}
+                onChangeText={setStake}
+                keyboardType="numeric"
+                maxLength={5}
+              />
+            </View>
+          </View>
+          <View style={[ssStyles.row, { borderTopWidth: 1, borderTopColor: 'rgba(196,241,53,0.08)', paddingTop: 16, marginTop: 4 }]}>
+            <View>
+              <Text style={ssStyles.label}>Carryover</Text>
+              <Text style={ssStyles.desc}>Ties carry pot to next hole</Text>
+            </View>
+            <Switch
+              value={carryover}
+              onValueChange={setCarryover}
+              trackColor={{ false: '#1E2640', true: '#8FB520' }}
+              thumbColor={carryover ? '#C4F135' : '#8A8FA8'}
+            />
+          </View>
+        </View>
+        {isAdmin && (
+          <TouchableOpacity style={ssStyles.createBtn} onPress={handleCreate} disabled={saving}>
+            <Text style={ssStyles.createBtnText}>{saving ? 'Creating…' : 'Start Skins Game'}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
   // ─── Main render ────────────────────────────────────────────────────────
 
   return (
@@ -731,21 +903,29 @@ export default function RoundDetailScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={20} color={Colors.textPrimary} />
+          <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {round.courseName ?? `Round ${round.roundNumber ?? ''}`}
+        <Text style={styles.headerTitle}>
+          {round.roundNumber ? `Round ${round.roundNumber}` : 'Round'}
         </Text>
-        <View style={[styles.statusPill, { backgroundColor: sc.bg }]}>
-          <Text style={[styles.statusText, { color: sc.text }]}>{round.status ?? 'UPCOMING'}</Text>
-        </View>
+        <TouchableOpacity
+          style={[styles.backBtn, { backgroundColor: Colors.lime + '22' }]}
+          onPress={() => router.push(`/round/stats?roundId=${id}` as any)}
+        >
+          <Ionicons name="bar-chart" size={18} color={Colors.lime} />
+        </TouchableOpacity>
       </View>
 
-      {/* Info card */}
+      {/* Course + date info */}
       <View style={styles.infoCard}>
+        <Text style={styles.courseNameLarge} numberOfLines={2}>
+          {round.courseName ?? 'Golf Course'}
+        </Text>
         <View style={styles.infoRow}>
-          <Ionicons name="calendar-outline" size={13} color={Colors.textSecondary} />
-          <Text style={styles.infoText}>{fmt(round.date)}</Text>
+          <Text style={styles.infoText}>
+            {round.date ? new Date(round.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : '—'}
+            {round.teeTime ? ` • ${round.teeTime}` : ''}
+          </Text>
           {round.coursePar && (
             <>
               <Text style={styles.infoDot}>·</Text>
@@ -794,218 +974,60 @@ export default function RoundDetailScreen() {
         </View>
       )}
 
-      {/* Tab switcher */}
-      <View style={styles.tabBar}>
-        {(['scorecard', 'bets', 'skins'] as RoundTab[]).map((t) => (
+      {/* Tab toggle */}
+      <View style={styles.tabRow}>
+        {(['scorecard', 'skins'] as const).map((t) => (
           <TouchableOpacity
             key={t}
             style={[styles.tabBtn, activeTab === t && styles.tabBtnActive]}
             onPress={() => setActiveTab(t)}
           >
             <Text style={[styles.tabBtnText, activeTab === t && styles.tabBtnTextActive]}>
-              {t === 'scorecard' ? 'Scorecard' : t === 'bets' ? 'Bets' : 'Skins'}
+              {t === 'scorecard' ? 'Scorecard' : 'Skins'}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {activeTab === 'scorecard' ? (
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.lime} />}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Running total indicator */}
-          {myHolesPlayed.length > 0 && (
-            <View style={styles.thruBar}>
-              <Text style={styles.thruText}>
-                THRU {myHolesPlayed.length}
-                {'  '}
-                <Text style={[styles.thruRel, { color: myRelThru < 0 ? Colors.birdie : myRelThru === 0 ? Colors.par : Colors.bogey }]}>
-                  {relLabel(myRelThru)}
-                </Text>
-              </Text>
-            </View>
-          )}
-
-          {players.length === 0 && (
-            <View style={styles.emptyState}>
-              <Ionicons name="people-outline" size={40} color={Colors.textMuted} />
-              <Text style={styles.emptyText}>No players in this round.</Text>
-            </View>
-          )}
-
-          {players.length > 0 && (
-            <>
-              <NineSection label="Front 9" list={front9} />
-              {back9.length > 0 && <NineSection label="Back 9" list={back9} />}
-
-              {/* Totals summary */}
-              <GlassCard style={styles.summaryCard}>
-                <Text style={styles.summaryTitle}>Round Summary</Text>
-                {players.map((player) => {
-                  const uid      = player.userId ?? player.id;
-                  const name     = player.user?.name ?? player.name ?? 'Unknown';
-                  const avatar   = player.user?.avatar ?? player.avatar;
-                  const handicap = player.user?.handicap ?? player.handicap ?? 0;
-                  const gross    = playerGross(uid);
-                  const net      = playerNet(uid, handicap);
-                  const rel      = gross > 0 ? gross - par : null;
-                  return (
-                    <View key={uid} style={styles.summaryRow}>
-                      <AvatarRing uri={avatar} name={name} size={32} ring="none" />
-                      <Text style={styles.summaryName} numberOfLines={1}>{name}</Text>
-                      <View style={styles.summaryScores}>
-                        {gross > 0 ? (
-                          <>
-                            <View style={styles.scoreChip}>
-                              <Text style={styles.scoreChipLabel}>Gross</Text>
-                              <Text style={styles.scoreChipValue}>{gross}</Text>
-                            </View>
-                            <View style={styles.scoreChip}>
-                              <Text style={styles.scoreChipLabel}>Net</Text>
-                              <Text style={styles.scoreChipValue}>{net}</Text>
-                            </View>
-                            <View style={[styles.scoreChip, styles.scoreChipRel]}>
-                              <Text style={[styles.scoreChipValue, {
-                                color: rel === 0 ? Colors.par : rel! < 0 ? Colors.birdie : Colors.bogey,
-                              }]}>
-                                {relLabel(rel!)}
-                              </Text>
-                            </View>
-                          </>
-                        ) : (
-                          <Text style={styles.totalDash}>No scores</Text>
-                        )}
-                      </View>
+      {/* Content */}
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.lime} />}
+      >
+        {activeTab === 'scorecard' && (
+          <>
+            {/* Hole par header */}
+            <View style={pcStyles.parHeader}>
+              <Text style={pcStyles.parHeaderLabel}>HOLE PARS</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={pcStyles.parRow}>
+                  {holes.map((h) => (
+                    <View key={h.holeNumber} style={pcStyles.parCell}>
+                      <Text style={pcStyles.parHoleNum}>{h.holeNumber}</Text>
+                      <Text style={pcStyles.parValue}>{h.par ?? 4}</Text>
                     </View>
-                  );
-                })}
-              </GlassCard>
-
-              {/* Round complete banner — Change 6 */}
-              {isComplete && (
-                <TouchableOpacity
-                  style={styles.statsBanner}
-                  onPress={() => router.push(`/round/stats?roundId=${id}` as any)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.statsBannerIcon}>📊</Text>
-                  <Text style={styles.statsBannerText}>View Round Stats</Text>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.lime} />
-                </TouchableOpacity>
-              )}
-            </>
-          )}
-        </ScrollView>
-      ) : (
-        /* ── Bets tab ── */
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{ padding: Spacing.md, paddingBottom: insets.bottom + 40, gap: 16 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.lime} />}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Skins */}
-          <GlassCard>
-            <View style={styles.betSectionHeader}>
-              <Text style={styles.betSectionTitle}>Skins</Text>
-              {skinsLoading && <ActivityIndicator size="small" color={Colors.lime} />}
-            </View>
-            <SkinsTable skins={skinsData ?? []} />
-          </GlassCard>
-
-          {/* Nassau */}
-          <GlassCard>
-            <View style={styles.betSectionHeader}>
-              <Text style={styles.betSectionTitle}>Nassau</Text>
-              {nassauLoading && <ActivityIndicator size="small" color={Colors.lime} />}
-            </View>
-            <NassauCards nassau={nassauData} />
-          </GlassCard>
-        </ScrollView>
-      )}
-
-      {activeTab === 'skins' && (
-        /* ── Skins tab ── */
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{ padding: Spacing.md, paddingBottom: insets.bottom + 40, gap: 16 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.lime} />}
-          showsVerticalScrollIndicator={false}
-        >
-          {skinsGameApiLoading ? (
-            <ActivityIndicator size="small" color={Colors.lime} style={{ marginTop: 40 }} />
-          ) : !skinsGameApiData || (Array.isArray(skinsGameApiData) && skinsGameApiData.length === 0) ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="cash-outline" size={40} color={Colors.textMuted} />
-              <Text style={styles.emptyText}>No skins game yet.</Text>
-              <TouchableOpacity
-                style={[styles.retryBtn, { marginTop: 8, backgroundColor: Colors.goldDim }]}
-                onPress={handleAddSkinsGame}
-                disabled={addSkinsLoading}
-              >
-                {addSkinsLoading
-                  ? <ActivityIndicator size="small" color={Colors.gold} />
-                  : <Text style={[styles.retryText, { color: Colors.gold }]}>Add Skins Game</Text>
-                }
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <GlassCard>
-              <View style={styles.betSectionHeader}>
-                <Text style={styles.betSectionTitle}>Skins Game</Text>
-              </View>
-              {/* Per-hole results table */}
-              <View style={skinsTabStyles.table}>
-                <View style={skinsTabStyles.headerRow}>
-                  <Text style={[skinsTabStyles.cell, skinsTabStyles.cellHole]}>Hole</Text>
-                  <Text style={[skinsTabStyles.cell, skinsTabStyles.cellPar]}>Par</Text>
-                  <Text style={[skinsTabStyles.cell, skinsTabStyles.cellScore]}>Low</Text>
-                  <Text style={[skinsTabStyles.cell, skinsTabStyles.cellWinner]}>Winner</Text>
-                  <Text style={[skinsTabStyles.cell, skinsTabStyles.cellPot]}>Pot</Text>
+                  ))}
                 </View>
-                {(Array.isArray(skinsGameApiData) ? skinsGameApiData : (skinsGameApiData?.holes ?? [])).map((h: any, idx: number) => {
-                  const isTied = !h.winner;
-                  const carryover = h.carryover ?? h.pot ?? 0;
-                  return (
-                    <View key={idx} style={[skinsTabStyles.dataRow, idx % 2 === 0 && skinsTabStyles.dataRowAlt]}>
-                      <Text style={[skinsTabStyles.cell, skinsTabStyles.cellHole, skinsTabStyles.dataText]}>{h.holeNumber ?? idx + 1}</Text>
-                      <Text style={[skinsTabStyles.cell, skinsTabStyles.cellPar, skinsTabStyles.dataText]}>{h.par ?? '–'}</Text>
-                      <Text style={[skinsTabStyles.cell, skinsTabStyles.cellScore, skinsTabStyles.dataText]}>{h.lowestScore ?? h.score ?? '–'}</Text>
-                      <Text style={[skinsTabStyles.cell, skinsTabStyles.cellWinner, isTied ? skinsTabStyles.carryText : skinsTabStyles.winnerText]}>
-                        {isTied ? `Carry $${carryover}` : (h.winner?.name ?? h.winnerName ?? '–')}
-                      </Text>
-                      <Text style={[skinsTabStyles.cell, skinsTabStyles.cellPot, isTied ? skinsTabStyles.carryText : skinsTabStyles.winnerText]}>
-                        {isTied ? `⚡` : `$${h.skinsWon ?? 1}`}
-                      </Text>
-                    </View>
-                  );
-                })}
+              </ScrollView>
+            </View>
+
+            {/* Player cards */}
+            {sortedPlayers.map((p, idx) => (
+              <PlayerCard key={p.userId ?? p.id} player={p} rank={idx + 1} />
+            ))}
+
+            {sortedPlayers.length === 0 && (
+              <View style={{ alignItems: 'center', paddingTop: 60 }}>
+                <Ionicons name="people-outline" size={40} color={Colors.textMuted} />
+                <Text style={{ color: Colors.textMuted, marginTop: 12 }}>No players yet</Text>
               </View>
-              {/* Payout summary */}
-              {(() => {
-                const holesArr = Array.isArray(skinsGameApiData) ? skinsGameApiData : (skinsGameApiData?.holes ?? []);
-                const payouts = computeSkinsPayouts(holesArr);
-                const entries = Object.entries(payouts);
-                if (entries.length === 0) return null;
-                return (
-                  <View style={skinsTabStyles.payoutSection}>
-                    <Text style={skinsTabStyles.payoutTitle}>Payout Summary</Text>
-                    {entries.map(([name, skins]) => (
-                      <View key={name} style={skinsTabStyles.payoutRow}>
-                        <Text style={skinsTabStyles.payoutName}>{name}</Text>
-                        <Text style={skinsTabStyles.payoutAmount}>{skins} skin{skins !== 1 ? 's' : ''}</Text>
-                      </View>
-                    ))}
-                  </View>
-                );
-              })()}
-            </GlassCard>
-          )}
-        </ScrollView>
-      )}
+            )}
+          </>
+        )}
+
+        {activeTab === 'skins' && <SkinsSetup />}
+      </ScrollView>
 
       {/* Number pad modal */}
       {pad && (
@@ -1086,15 +1108,19 @@ const styles = StyleSheet.create({
   infoText: { color: Colors.textSecondary, fontSize: 13 },
   infoDot:  { color: Colors.textMuted, fontSize: 13 },
 
-  // Tab bar
-  tabBar: {
+  // Tab row
+  tabRow: {
     flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderBottomWidth: 1, borderBottomColor: Colors.cardBorder,
   },
-  tabBtn: { flex: 1, paddingVertical: 11, alignItems: 'center' },
-  tabBtnActive: { borderBottomWidth: 2, borderBottomColor: Colors.lime },
-  tabBtnText: { color: Colors.textMuted, fontSize: 13, fontWeight: '600' },
-  tabBtnTextActive: { color: Colors.lime },
+  tabBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 999, backgroundColor: '#161D2E' },
+  tabBtnActive: { backgroundColor: '#C4F135' },
+  tabBtnText: { color: '#8A8FA8', fontSize: 14, fontWeight: '600' },
+  tabBtnTextActive: { color: '#080C14', fontWeight: '700' },
+  courseNameLarge: { color: '#F4EFE6', fontSize: 20, fontWeight: '700', marginBottom: 4 },
 
   // Running total bar
   thruBar: {
@@ -1163,4 +1189,200 @@ const styles = StyleSheet.create({
   errorText:  { color: Colors.textPrimary, fontSize: 16, fontWeight: '700', marginTop: 12 },
   retryBtn:   { marginTop: 16, paddingHorizontal: 20, paddingVertical: 10, backgroundColor: Colors.limeDim, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.lime + '44' },
   retryText:  { color: Colors.lime, fontSize: 13, fontWeight: '700' },
+});
+
+// ─── Player card styles ───────────────────────────────────────────────────────
+const pcStyles = StyleSheet.create({
+  card: {
+    backgroundColor: '#0F1420',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(196,241,53,0.10)',
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  rankCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rankText: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  playerName: {
+    color: '#F4EFE6',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  nickname: {
+    color: '#8A8FA8',
+    fontSize: 12,
+    marginTop: 1,
+  },
+  scoreRel: {
+    color: '#F4EFE6',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  grossText: {
+    color: '#8A8FA8',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  chipsScroll: {
+    marginBottom: 10,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    gap: 5,
+    paddingVertical: 2,
+  },
+  chip: {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  tagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+  },
+  tag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  tagDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  tagText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  parHeader: {
+    marginBottom: 12,
+    paddingTop: 8,
+  },
+  parHeaderLabel: {
+    color: '#3D4460',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    marginBottom: 6,
+  },
+  parRow: {
+    flexDirection: 'row',
+    gap: 5,
+  },
+  parCell: {
+    width: 30,
+    alignItems: 'center',
+    gap: 2,
+  },
+  parHoleNum: {
+    color: '#8A8FA8',
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  parValue: {
+    color: '#F4EFE6',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+});
+
+// ─── Skins setup styles ───────────────────────────────────────────────────────
+const ssStyles = StyleSheet.create({
+  wrap: {
+    paddingTop: 8,
+  },
+  title: {
+    color: '#F4EFE6',
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  subtitle: {
+    color: '#8A8FA8',
+    fontSize: 14,
+    marginBottom: 20,
+  },
+  card: {
+    backgroundColor: '#0F1420',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(196,241,53,0.10)',
+    gap: 8,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  label: {
+    color: '#F4EFE6',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  desc: {
+    color: '#8A8FA8',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  inputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#161D2E',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 4,
+    minWidth: 70,
+  },
+  dollar: {
+    color: '#C4F135',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  input: {
+    color: '#F4EFE6',
+    fontSize: 16,
+    fontWeight: '700',
+    minWidth: 30,
+    textAlign: 'center',
+  },
+  createBtn: {
+    marginTop: 20,
+    backgroundColor: '#C4F135',
+    borderRadius: 999,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  createBtnText: {
+    color: '#080C14',
+    fontSize: 15,
+    fontWeight: '800',
+  },
 });

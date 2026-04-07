@@ -6,10 +6,10 @@ export const Colors = {
   bgTertiary:   '#161D2E',
   bgElevated:   '#1E2640',
 
-  // Primary — champagne gold
-  gold:         '#D4A843',
-  goldMuted:    '#8B6F2E',
-  goldLight:    '#F0C866',
+  // Primary — lime green (matches screenshots)
+  gold:         '#C4F135',
+  goldMuted:    '#8FB520',
+  goldLight:    '#D8FF50',
 
   // Secondary — electric teal
   teal:         '#00C9A7',
@@ -20,39 +20,39 @@ export const Colors = {
   textSecondary:'#8A8FA8',
   textMuted:    '#3D4460',
 
-  // Score colors
-  scoreEagle:   '#00C9A7',
-  scoreBirdie:  '#D4A843',
-  scorePar:     '#F4EFE6',
-  scoreBogey:   '#C17B2E',
-  scoreDouble:  '#C44B4B',
+  // Score colors (matches screenshots: blue=eagle, lime=birdie, dark=par, orange=bogey, red=double)
+  scoreEagle:   '#3B62D9',
+  scoreBirdie:  '#C4F135',
+  scorePar:     '#1A2030',
+  scoreBogey:   '#D4561A',
+  scoreDouble:  '#9B1C1C',
 
   // Functional
   success:      '#2DD4A0',
   error:        '#C44B4B',
-  warning:      '#C17B2E',
+  warning:      '#D4561A',
 
   // Borders
-  border:       'rgba(212, 168, 67, 0.12)',
-  borderStrong: 'rgba(212, 168, 67, 0.30)',
-  cardBorder:   'rgba(212, 168, 67, 0.12)',
+  border:       'rgba(196, 241, 53, 0.12)',
+  borderStrong: 'rgba(196, 241, 53, 0.30)',
+  cardBorder:   'rgba(196, 241, 53, 0.12)',
 
-  // Legacy aliases (keep for backward compat)
-  lime:         '#D4A843',
-  limeDim:      'rgba(212, 168, 67, 0.15)',
-  limeGlow:     'rgba(212, 168, 67, 0.25)',
-  goldDim:      'rgba(212, 168, 67, 0.15)',
-  goldGlow:     'rgba(212, 168, 67, 0.25)',
+  // Legacy aliases
+  lime:         '#C4F135',
+  limeDim:      'rgba(196, 241, 53, 0.15)',
+  limeGlow:     'rgba(196, 241, 53, 0.25)',
+  goldDim:      'rgba(196, 241, 53, 0.15)',
+  goldGlow:     'rgba(196, 241, 53, 0.25)',
   tealDim:      'rgba(0, 201, 167, 0.15)',
   tealGlow:     'rgba(0, 201, 167, 0.25)',
-  purple:       '#00C9A7',
-  purpleDim:    'rgba(0, 201, 167, 0.15)',
-  purpleGlow:   'rgba(0, 201, 167, 0.25)',
+  purple:       '#4361B8',
+  purpleDim:    'rgba(67, 97, 184, 0.15)',
+  purpleGlow:   'rgba(67, 97, 184, 0.25)',
   card:         '#0F1420',
-  cardBorderActive: 'rgba(212, 168, 67, 0.30)',
+  cardBorderActive: 'rgba(196, 241, 53, 0.30)',
   glass:        'rgba(15,20,32,0.8)',
-  glassBorder:  'rgba(212,168,67,0.10)',
-  orange:       '#C17B2E',
+  glassBorder:  'rgba(196,241,53,0.10)',
+  orange:       '#D4561A',
   overlay:    'rgba(8,12,20,0.85)',
   surface:    '#080C14',
   offWhite:   '#F4EFE6',
@@ -67,23 +67,23 @@ export const Colors = {
   info:       '#00C9A7',
 
   // Score legacy
-  eagle:       '#00C9A7',
-  birdie:      '#D4A843',
-  par:         '#F4EFE6',
-  bogey:       '#C17B2E',
-  doubleBogey: '#C44B4B',
+  eagle:       '#3B62D9',
+  birdie:      '#C4F135',
+  par:         '#1A2030',
+  bogey:       '#D4561A',
+  doubleBogey: '#9B1C1C',
 };
 
 export const Gradients = {
-  gold:       ['#F0C866', '#C4912A'] as const,
+  gold:       ['#D8FF50', '#8FB520'] as const,
   hero:       ['#1A2340', '#080C14'] as const,
   cardOverlay:['transparent', 'rgba(8,12,20,0.92)'] as const,
   card:       ['#0F1420', '#080C14'] as const,
   teal:       ['#00C9A7', '#007A65'] as const,
   // Legacy
-  accent:      ['#F0C866', '#C4912A'] as const,
-  limeAlpha:   ['rgba(212,168,67,0.3)', 'rgba(212,168,67,0)'] as const,
-  purpleAlpha: ['rgba(0,201,167,0.3)', 'rgba(0,201,167,0)'] as const,
+  accent:      ['#D8FF50', '#8FB520'] as const,
+  limeAlpha:   ['rgba(196,241,53,0.3)', 'rgba(196,241,53,0)'] as const,
+  purpleAlpha: ['rgba(67,97,184,0.3)', 'rgba(67,97,184,0)'] as const,
   darkOverlay: ['rgba(8,12,20,0)', 'rgba(8,12,20,0.95)'] as const,
 };
 
@@ -128,7 +128,7 @@ export const Typography = {
 
 export const Shadows = {
   gold: {
-    shadowColor: '#D4A843',
+    shadowColor: '#C4F135',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 16,
@@ -153,14 +153,14 @@ export const Shadows = {
 // Legacy alias
 export const Shadow = {
   lime: {
-    shadowColor: '#D4A843',
+    shadowColor: '#C4F135',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 16,
     elevation: 10,
   },
   purple: {
-    shadowColor: '#00C9A7',
+    shadowColor: '#4361B8',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 16,
@@ -174,7 +174,7 @@ export const Shadow = {
     elevation: 12,
   },
   gold: {
-    shadowColor: '#D4A843',
+    shadowColor: '#C4F135',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 16,

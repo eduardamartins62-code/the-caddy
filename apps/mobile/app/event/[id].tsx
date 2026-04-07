@@ -892,6 +892,82 @@ export default function EventDetailScreen() {
     );
   };
 
+  // ─── Round card component ─────────────────────────────────────────────────
+
+  function RoundCard({ round, index, isLive, isCompleted, sBg, sText, roundPlayers, onEnterScores, onViewScorecard }: any) {
+    const [expanded, setExpanded] = React.useState(true);
+    const coursePar = round.coursePar ?? 72;
+    return (
+      <View style={rdStyles.card}>
+        {round.courseImageUrl ? (
+          <Image source={{ uri: round.courseImageUrl }} style={rdStyles.courseImg} resizeMode="cover" />
+        ) : (
+          <View style={rdStyles.courseImgPlaceholder}>
+            <Ionicons name="golf-outline" size={32} color={Colors.textMuted} />
+          </View>
+        )}
+        <View style={rdStyles.rBadge}>
+          <Text style={rdStyles.rBadgeText}>R{round.roundNumber ?? index + 1}</Text>
+        </View>
+        <View style={rdStyles.infoRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={rdStyles.courseName} numberOfLines={2}>
+              {round.courseName ?? `Round ${round.roundNumber ?? index + 1}`}
+            </Text>
+            <Text style={rdStyles.roundDate}>
+              {round.date ? new Date(round.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={[rdStyles.statusBadge, { backgroundColor: sBg }]}>
+              <Text style={[rdStyles.statusText, { color: sText }]}>
+                {round.status === 'UPCOMING' ? 'SOON' : round.status ?? 'SOON'}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setExpanded(!expanded)}>
+              <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </View>
+        {expanded && roundPlayers.length > 0 && (
+          <View style={rdStyles.table}>
+            <View style={rdStyles.tableHeader}>
+              <Text style={[rdStyles.tableHeaderText, { flex: 1 }]}>PLAYER</Text>
+              <Text style={rdStyles.tableHeaderText}>TOT</Text>
+              <Text style={rdStyles.tableHeaderText}>+/-</Text>
+            </View>
+            {roundPlayers.slice(0, 8).map((p: any) => {
+              const gs = p.grossScore ?? p.totalStrokes ?? 0;
+              const rel = gs > 0 ? gs - coursePar : null;
+              const relColor = rel === null ? Colors.textSecondary : rel === 0 ? Colors.textPrimary : rel < 0 ? Colors.lime : Colors.error;
+              return (
+                <View key={p.userId ?? p.id ?? p.user?.id} style={rdStyles.tableRow}>
+                  <Text style={rdStyles.tablePlayerName} numberOfLines={1}>
+                    {p.user?.name ?? p.name ?? 'Player'}
+                  </Text>
+                  <Text style={rdStyles.tableScore}>{gs > 0 ? gs : '0'}</Text>
+                  <Text style={[rdStyles.tableRel, { color: relColor }]}>
+                    {rel === null || rel === 0 ? 'E' : rel > 0 ? `+${rel}` : `${rel}`}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+        {isLive && (
+          <TouchableOpacity style={rdStyles.actionBtn} onPress={onEnterScores}>
+            <Text style={rdStyles.actionBtnText}>Enter Scores</Text>
+          </TouchableOpacity>
+        )}
+        {isCompleted && (
+          <TouchableOpacity style={[rdStyles.actionBtn, rdStyles.actionBtnOutline]} onPress={onViewScorecard}>
+            <Text style={[rdStyles.actionBtnText, { color: Colors.textSecondary }]}>View Scorecard</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  }
+
   // ─── Tab 3: Rounds ────────────────────────────────────────────────────────
 
   const RoundsTab = () => {
@@ -937,47 +1013,20 @@ export default function EventDetailScreen() {
           const { bg: sBg, text: sText } = statusBadgeColors(round.status ?? 'UPCOMING');
           const isLive = round.status === 'LIVE';
           const isCompleted = round.status === 'COMPLETED';
+          const roundPlayers: any[] = round.participants ?? (participants ?? []);
           return (
-            <GlassCard key={round.id} style={styles.roundCard} glow={isLive ? 'lime' : 'none'}>
-              <View style={styles.roundCardRow}>
-                <View style={styles.roundNumBadge}>
-                  {isLive && <View style={styles.livePulse} />}
-                  <Text style={styles.roundNumText}>R{round.roundNumber ?? i + 1}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.roundCourseName} numberOfLines={1}>
-                    {round.courseName ?? `Round ${round.roundNumber ?? i + 1}`}
-                  </Text>
-                  <Text style={styles.roundMeta}>
-                    {fmt(round.date)}{round.coursePar ? ` · Par ${round.coursePar}` : ''}
-                  </Text>
-                  {round.players != null && (
-                    <Text style={styles.roundMeta}>{round.players} players</Text>
-                  )}
-                </View>
-                <View style={[styles.roundStatusPill, { backgroundColor: sBg }]}>
-                  <Text style={[styles.roundStatusText, { color: sText }]}>{round.status ?? 'UPCOMING'}</Text>
-                </View>
-              </View>
-              {isLive && (
-                <TouchableOpacity
-                  style={styles.roundActionBtn}
-                  onPress={() => router.push(`/admin/scores?roundId=${round.id}` as any)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.roundActionBtnText}>Enter Scores</Text>
-                </TouchableOpacity>
-              )}
-              {isCompleted && (
-                <TouchableOpacity
-                  style={[styles.roundActionBtn, styles.roundActionBtnOutline]}
-                  onPress={() => router.push(`/round/${round.id}` as any)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.roundActionBtnText, { color: Colors.textSecondary }]}>View Scorecard</Text>
-                </TouchableOpacity>
-              )}
-            </GlassCard>
+            <RoundCard
+              key={round.id}
+              round={round}
+              index={i}
+              isLive={isLive}
+              isCompleted={isCompleted}
+              sBg={sBg}
+              sText={sText}
+              roundPlayers={roundPlayers}
+              onEnterScores={() => router.push(`/admin/scores?roundId=${round.id}` as any)}
+              onViewScorecard={() => router.push(`/round/${round.id}` as any)}
+            />
           );
         })}
       </ScrollView>
@@ -1014,15 +1063,31 @@ export default function EventDetailScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.dayPills}
         >
-          {allDays.map((d) => (
-            <TouchableOpacity
-              key={d}
-              style={[styles.dayPill, itinDay === d && styles.dayPillActive]}
-              onPress={() => setItinDay(d)}
-            >
-              <Text style={[styles.dayPillText, itinDay === d && styles.dayPillTextActive]}>Day {d}</Text>
-            </TouchableOpacity>
-          ))}
+          {allDays.map((d) => {
+            const eventStart = event.startDate ? new Date(event.startDate) : null;
+            let dayLabel = `Day ${d}`;
+            if (eventStart) {
+              const dayDate = new Date(eventStart);
+              dayDate.setDate(dayDate.getDate() + d - 1);
+              const weekday = dayDate.toLocaleDateString('en-US', { weekday: 'long' });
+              const roundOnDay = (event.rounds ?? []).find((r: any) => {
+                if (!r.date) return false;
+                return new Date(r.date).toDateString() === dayDate.toDateString();
+              });
+              if (d === 1 && !roundOnDay) dayLabel = `${weekday} - Arrival`;
+              else if (roundOnDay) dayLabel = `${weekday} - Round ${roundOnDay.roundNumber ?? ''}`;
+              else dayLabel = weekday;
+            }
+            return (
+              <TouchableOpacity
+                key={d}
+                style={[styles.dayPill, itinDay === d && styles.dayPillActive]}
+                onPress={() => setItinDay(d)}
+              >
+                <Text style={[styles.dayPillText, itinDay === d && styles.dayPillTextActive]}>{dayLabel}</Text>
+              </TouchableOpacity>
+            );
+          })}
           {isOrganizer && (
             <TouchableOpacity style={styles.addItinBtn} onPress={() => setItinModalVisible(true)}>
               <Ionicons name="add" size={16} color={Colors.lime} />
@@ -1042,39 +1107,19 @@ export default function EventDetailScreen() {
               <Text style={styles.emptyText}>No activities for Day {itinDay}.</Text>
             </View>
           )}
-          {dayItems.map((item: any) => {
-            const typeColor = ITINERARY_TYPE_COLORS[item.type] || Colors.textMuted;
-            const iconName = ITINERARY_TYPE_ICONS[item.type] || 'layers-outline';
-            return (
-              <GlassCard key={item.id} style={styles.itinCard}>
-                <View style={styles.itinRow}>
-                  <View style={[styles.itinIconBox, { backgroundColor: typeColor + '22', borderColor: typeColor + '44' }]}>
-                    <Ionicons name={iconName as any} size={18} color={typeColor} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.itinTitleRow}>
-                      <Text style={styles.itinTitle}>{item.title}</Text>
-                      <View style={[styles.itinTypePill, { backgroundColor: typeColor + '22' }]}>
-                        <Text style={[styles.itinTypePillText, { color: typeColor }]}>{item.type}</Text>
-                      </View>
-                    </View>
-                    {item.time && (
-                      <Text style={styles.itinTime}>{item.time}</Text>
-                    )}
-                    {item.location && (
-                      <View style={styles.itinLocRow}>
-                        <Ionicons name="location-outline" size={11} color={Colors.textSecondary} />
-                        <Text style={styles.itinLocText}>{item.location}</Text>
-                      </View>
-                    )}
-                    {item.description && (
-                      <Text style={styles.itinDesc}>{item.description}</Text>
-                    )}
-                  </View>
+          {dayItems.map((item: any) => (
+            <View key={item.id} style={itStyles.card}>
+              {item.time && <Text style={itStyles.time}>{item.time}</Text>}
+              <Text style={itStyles.title}>{item.title}</Text>
+              {item.description && <Text style={itStyles.desc}>{item.description}</Text>}
+              {item.location && (
+                <View style={itStyles.locRow}>
+                  <Ionicons name="location-outline" size={12} color={Colors.textMuted} />
+                  <Text style={itStyles.locText}>{item.location}</Text>
                 </View>
-              </GlassCard>
-            );
-          })}
+              )}
+            </View>
+          ))}
         </ScrollView>
       </View>
     );
@@ -1976,4 +2021,72 @@ const modalStyles = StyleSheet.create({
   playerUsername: { color: Colors.textSecondary, fontSize: 12, marginTop: 1 },
   playerHcp:      { color: Colors.lime, fontSize: 12, fontWeight: '700' },
   noResults:      { color: Colors.textMuted, fontSize: 13, textAlign: 'center', paddingVertical: 20 },
+});
+
+// ─── Round card styles ────────────────────────────────────────────────────────
+const rdStyles = StyleSheet.create({
+  card: {
+    backgroundColor: '#0F1420',
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(196,241,53,0.10)',
+  },
+  courseImg: { width: '100%', height: 140 },
+  courseImgPlaceholder: {
+    width: '100%', height: 100,
+    backgroundColor: '#161D2E', alignItems: 'center', justifyContent: 'center',
+  },
+  rBadge: {
+    position: 'absolute', top: 12, left: 12,
+    backgroundColor: '#C4F135', borderRadius: 6,
+    paddingHorizontal: 8, paddingVertical: 4,
+  },
+  rBadgeText: { color: '#080C14', fontSize: 12, fontWeight: '800' },
+  infoRow: { flexDirection: 'row', alignItems: 'flex-start', padding: 14, gap: 10 },
+  courseName: { color: '#F4EFE6', fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  roundDate: { color: '#8A8FA8', fontSize: 13 },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+  statusText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+  table: {
+    marginHorizontal: 14, marginBottom: 10,
+    borderTopWidth: 1, borderTopColor: 'rgba(196,241,53,0.08)',
+  },
+  tableHeader: {
+    flexDirection: 'row', paddingVertical: 6,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(196,241,53,0.08)',
+  },
+  tableHeaderText: { color: '#3D4460', fontSize: 10, fontWeight: '700', letterSpacing: 1, width: 50, textAlign: 'right' },
+  tableRow: {
+    flexDirection: 'row', paddingVertical: 8,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(30,38,64,0.5)',
+  },
+  tablePlayerName: { flex: 1, color: '#F4EFE6', fontSize: 14, fontWeight: '500' },
+  tableScore: { width: 50, textAlign: 'right', color: '#F4EFE6', fontSize: 14, fontWeight: '700' },
+  tableRel: { width: 50, textAlign: 'right', fontSize: 14, fontWeight: '700' },
+  actionBtn: {
+    margin: 14, marginTop: 4,
+    backgroundColor: '#C4F135', borderRadius: 999,
+    paddingVertical: 12, alignItems: 'center',
+  },
+  actionBtnOutline: {
+    backgroundColor: 'transparent',
+    borderWidth: 1, borderColor: 'rgba(196,241,53,0.20)',
+  },
+  actionBtnText: { color: '#080C14', fontSize: 14, fontWeight: '700' },
+});
+
+// ─── Itinerary item styles ────────────────────────────────────────────────────
+const itStyles = StyleSheet.create({
+  card: {
+    backgroundColor: '#0F1420', borderRadius: 14,
+    padding: 16, marginBottom: 10,
+    borderWidth: 1, borderColor: 'rgba(196,241,53,0.08)',
+  },
+  time: { color: '#C4F135', fontSize: 14, fontWeight: '700', marginBottom: 4 },
+  title: { color: '#F4EFE6', fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  desc: { color: '#8A8FA8', fontSize: 13, marginBottom: 6 },
+  locRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  locText: { color: '#8A8FA8', fontSize: 12, flex: 1 },
 });
