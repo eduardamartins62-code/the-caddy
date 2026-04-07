@@ -386,11 +386,9 @@ export default function TabsLayout() {
 
 const tabBarStyles = StyleSheet.create({
   outerWrapper: {
-    position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   topBorder: {
     position: 'absolute',
