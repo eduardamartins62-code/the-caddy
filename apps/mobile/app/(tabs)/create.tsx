@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View, Text, TextInput, StyleSheet, TouchableOpacity,
   Image, ScrollView, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
+import { Video, ResizeMode } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
@@ -121,7 +122,17 @@ export default function CreateScreen() {
         {/* Media picker / preview */}
         {mediaUri ? (
           <View style={styles.mediaWrap}>
-            <Image source={{ uri: mediaUri }} style={styles.mediaImg} resizeMode="cover" />
+            {mediaType === 'video' ? (
+              <Video
+                source={{ uri: mediaUri }}
+                style={styles.mediaImg}
+                resizeMode={ResizeMode.COVER}
+                shouldPlay={false}
+                useNativeControls
+              />
+            ) : (
+              <Image source={{ uri: mediaUri }} style={styles.mediaImg} resizeMode="cover" />
+            )}
             <TouchableOpacity style={styles.removeMedia} onPress={() => { setMediaUri(null); setMediaType(null); }}>
               <CircleX size={28} stroke={Colors.error} strokeWidth={2} />
             </TouchableOpacity>

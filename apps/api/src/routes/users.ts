@@ -15,7 +15,7 @@ const PUBLIC_SELECT = {
 const PRIVATE_SELECT = {
   id: true, email: true, phone: true, name: true, username: true, avatar: true,
   bio: true, handicap: true, homeCourse: true, location: true,
-  role: true, createdAt: true, onboardingComplete: true, isPrivate: true,
+  role: true, createdAt: true, isOnboarded: true, isPrivate: true,
   _count: { select: { followers: true, following: true } },
 };
 
@@ -29,9 +29,28 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
   res.json({ data: user });
 });
 
+// GET /api/users/check-username
+router.get('/check-username', async (req, res: Response) => {
+  const username = req.query.username as string;
+  if (!username || username.length < 3) { res.json({ available: false }); return; }
+  const existing = await prisma.user.findUnique({ where: { username } });
+  res.json({ available: !existing });
+});
+
+// DELETE /api/users/me
+router.delete('/me', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    await prisma.user.delete({ where: { id: req.user!.id } });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('DELETE /users/me error', err);
+    res.status(500).json({ error: 'Failed to delete account' });
+  }
+});
+
 // PUT /api/users/me — update own profile
 router.put('/me', authenticate, async (req: AuthRequest, res: Response) => {
-  const { name, bio, handicap, homeCourse, location, avatar, username, isPrivate, onboardingComplete } = req.body;
+  const { name, bio, handicap, homeCourse, location, avatar, username, isPrivate, isOnboarded } = req.body;
 
   // Validate username if provided
   if (username !== undefined && username !== null && username !== '') {
@@ -57,8 +76,8 @@ router.put('/me', authenticate, async (req: AuthRequest, res: Response) => {
       ...(location !== undefined        ? { location }         : {}),
       ...(avatar !== undefined          ? { avatar }           : {}),
       ...(username !== undefined        ? { username: username || null } : {}),
-      ...(isPrivate !== undefined       ? { isPrivate }        : {}),
-      ...(onboardingComplete !== undefined ? { onboardingComplete } : {}),
+      ...(isPrivate !== undefined   ? { isPrivate }    : {}),
+      ...(isOnboarded !== undefined ? { isOnboarded }  : {}),
     },
     select: PRIVATE_SELECT,
   });
@@ -166,7 +185,7 @@ router.post('/me/handicap/calculate', authenticate, async (req: AuthRequest, res
 
     // Save HandicapRecord
     await prisma.handicapRecord.create({
-      data: { userId, handicapIndex, roundsUsed: n },
+      data: { userId, handicapIndex, differential: Math.round(avgDiff * 10) / 10 },
     });
 
     // Update user.handicapIndex
@@ -434,7 +453,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   if (req.user!.id !== req.params.id && req.user!.role !== 'SUPER_ADMIN') {
     res.status(403).json({ error: 'Forbidden' }); return;
   }
-  const { name, bio, handicap, homeCourse, location, avatar, username, isPrivate, onboardingComplete } = req.body;
+  const { name, bio, handicap, homeCourse, location, avatar, username, isPrivate, isOnboarded } = req.body;
 
   if (username !== undefined && username !== null && username !== '') {
     if (!/^[a-zA-Z0-9_]{1,30}$/.test(username)) {
@@ -458,8 +477,8 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       ...(location !== undefined        ? { location }         : {}),
       ...(avatar !== undefined          ? { avatar }           : {}),
       ...(username !== undefined        ? { username: username || null } : {}),
-      ...(isPrivate !== undefined       ? { isPrivate }        : {}),
-      ...(onboardingComplete !== undefined ? { onboardingComplete } : {}),
+      ...(isPrivate !== undefined   ? { isPrivate }   : {}),
+      ...(isOnboarded !== undefined ? { isOnboarded } : {}),
     },
     select: PRIVATE_SELECT,
   });
@@ -497,22 +516,39 @@ router.get('/:id/stats', async (req, res: Response) => {
     return { roundId: r.roundId, eventName: r.eventName, date: r.date, grossScore: gross, netScore: gross - handicap };
   });
 
-  let totalBirdies = 0, totalEagles = 0, totalPars = 0;
+  let totalBirdies = 0, totalEagles = 0, totalPars = 0, totalBogeys = 0, totalDoubles = 0, holesInOne = 0;
   for (const score of scores) {
     const hole = score.round.holes.find(h => h.holeNumber === score.holeNumber);
     if (!hole) continue;
     const diff = score.strokes - hole.par;
+    if (score.strokes === 1) holesInOne++;
     if (diff <= -2) totalEagles++;
     else if (diff === -1) totalBirdies++;
     else if (diff === 0) totalPars++;
+    else if (diff === 1) totalBogeys++;
+    else if (diff === 2) totalDoubles++;
   }
+
+  const userRecord = await prisma.user.findUnique({
+    where:  { id: userId },
+    select: { handicapIndex: true },
+  });
 
   const grossScores = roundBreakdown.map(r => r.grossScore);
   res.json({
     data: {
-      totalRounds:  roundBreakdown.length,
-      averageScore: grossScores.length ? Math.round(grossScores.reduce((a, b) => a + b, 0) / grossScores.length) : 0,
-      bestScore:    grossScores.length ? Math.min(...grossScores) : 0,
+      totalRounds:    roundBreakdown.length,
+      avgScore:       grossScores.length ? Math.round(grossScores.reduce((a, b) => a + b, 0) / grossScores.length) : 0,
+      averageScore:   grossScores.length ? Math.round(grossScores.reduce((a, b) => a + b, 0) / grossScores.length) : 0,
+      bestRound:      grossScores.length ? Math.min(...grossScores) : 0,
+      bestScore:      grossScores.length ? Math.min(...grossScores) : 0,
+      eagles:         totalEagles,
+      birdies:        totalBirdies,
+      pars:           totalPars,
+      bogeys:         totalBogeys,
+      doubles:        totalDoubles,
+      holesInOne,
+      handicapIndex:  userRecord?.handicapIndex ?? null,
       totalBirdies, totalEagles, totalPars,
       roundBreakdown,
     },

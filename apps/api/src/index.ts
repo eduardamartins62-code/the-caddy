@@ -98,7 +98,7 @@ app.use('/api/invite',        inviteRoutes);
 app.use('/api/feed',          feedRoutes);
 app.use('/api/reviews',       reviewRoutes);
 
-app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+app.get('/health', (_req, res) => res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() }));
 
 // ─── Global Error Handler ─────────────────────────────────────────────────────
 

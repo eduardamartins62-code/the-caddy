@@ -19,7 +19,8 @@ export function useLeaderboardSocket(
       socket.emit('join:event', eventId);
     });
 
-    socket.on('leaderboard:update', (data: { eventId: string; leaderboard: LeaderboardEntry[] }) => {
+    // Spec: listen for 'leaderboard:updated'
+    socket.on('leaderboard:updated', (data: { eventId: string; leaderboard: LeaderboardEntry[] }) => {
       if (data.eventId === eventId) onUpdate(data.leaderboard);
     });
 

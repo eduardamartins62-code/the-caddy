@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Switch, Alert, Linking,
+  Switch, Alert, Linking, TextInput, Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '../context/AuthContext';
 import { useMe } from '../hooks/useQueries';
 import { usersApi } from '../services/api';
 import { Colors, Radius, Spacing } from '../constants/theme';
 import { APP_CONFIG } from '../constants/config';
+import { API_BASE } from '../constants/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -78,6 +80,9 @@ export default function SettingsScreen() {
 
   const [pushEnabled, setPushEnabled] = useState(true);
   const [privacyLoading, setPrivacyLoading] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const user = me as any;
   const isPrivate = !!user?.isPrivate;
@@ -92,6 +97,29 @@ export default function SettingsScreen() {
       Alert.alert('Error', 'Could not update privacy setting. Please try again.');
     } finally {
       setPrivacyLoading(false);
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (deleteConfirmText !== 'DELETE') {
+      Alert.alert('Error', 'Please type DELETE to confirm.');
+      return;
+    }
+    setDeleting(true);
+    try {
+      const token = await SecureStore.getItemAsync('auth_token');
+      await fetch(`${API_BASE}/users/me`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await SecureStore.deleteItemAsync('auth_token');
+      setDeleteModalVisible(false);
+      await signOut();
+      router.replace('/(auth)/signin' as any);
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Failed to delete account. Please try again.');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -207,8 +235,59 @@ export default function SettingsScreen() {
             </View>
             <Text style={styles.signOutLabel}>Sign Out</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.signOutBtn, { borderTopWidth: 1, borderTopColor: Colors.cardBorder }]}
+            onPress={() => { setDeleteConfirmText(''); setDeleteModalVisible(true); }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuIconBox, { backgroundColor: Colors.error + '22' }]}>
+              <Ionicons name="trash-outline" size={19} color={Colors.error} />
+            </View>
+            <Text style={styles.signOutLabel}>Delete Account</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Delete Account confirmation modal */}
+      <Modal
+        visible={deleteModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setDeleteModalVisible(false)}
+      >
+        <View style={styles.deleteModal}>
+          <Text style={styles.deleteModalTitle}>Delete Account</Text>
+          <Text style={styles.deleteModalSub}>
+            This action is permanent and cannot be undone. All your data will be deleted.
+          </Text>
+          <Text style={[styles.deleteModalSub, { marginTop: 16 }]}>
+            Type <Text style={{ color: Colors.error, fontWeight: '700' }}>DELETE</Text> to confirm:
+          </Text>
+          <TextInput
+            style={styles.deleteInput}
+            value={deleteConfirmText}
+            onChangeText={setDeleteConfirmText}
+            placeholder="DELETE"
+            placeholderTextColor={Colors.textMuted}
+            autoCapitalize="characters"
+            autoCorrect={false}
+          />
+          <TouchableOpacity
+            style={[styles.deleteBtn, deleteConfirmText !== 'DELETE' && { opacity: 0.5 }]}
+            onPress={handleDeleteAccount}
+            disabled={deleting || deleteConfirmText !== 'DELETE'}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.deleteBtnText}>{deleting ? 'Deleting...' : 'Delete My Account'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.deleteCancelBtn}
+            onPress={() => setDeleteModalVisible(false)}
+          >
+            <Text style={styles.deleteCancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -306,4 +385,50 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
+
+  // Delete account modal
+  deleteModal: {
+    flex: 1,
+    backgroundColor: Colors.bg,
+    padding: Spacing.lg,
+    paddingTop: 48,
+  },
+  deleteModalTitle: {
+    color: Colors.error,
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 12,
+  },
+  deleteModalSub: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  deleteInput: {
+    marginTop: 12,
+    backgroundColor: Colors.bgSecondary,
+    borderWidth: 1.5, borderColor: Colors.error + '55',
+    borderRadius: Radius.md,
+    paddingHorizontal: 14, paddingVertical: 12,
+    color: Colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 2,
+    marginBottom: 20,
+  },
+  deleteBtn: {
+    backgroundColor: Colors.error,
+    borderRadius: Radius.pill,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  deleteBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  deleteCancelBtn: {
+    borderWidth: 1, borderColor: Colors.cardBorder,
+    borderRadius: Radius.pill,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  deleteCancelText: { color: Colors.textSecondary, fontSize: 15, fontWeight: '600' },
 });

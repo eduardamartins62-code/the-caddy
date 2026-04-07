@@ -156,6 +156,56 @@ router.get('/:id', async (req, res: Response) => {
   }
 });
 
+// GET /api/courses/:courseId/reviews — get reviews with average rating
+router.get('/:courseId/reviews', async (req, res: Response) => {
+  try {
+    const reviews = await prisma.golfCourse.findUnique({
+      where: { id: req.params.courseId },
+    });
+    if (!reviews) { res.status(404).json({ error: 'Course not found' }); return; }
+
+    const courseReviews = await prisma.courseReview.findMany({
+      where: { courseId: req.params.courseId },
+      include: { user: { select: { id: true, name: true, avatar: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    const avg = courseReviews.length
+      ? courseReviews.reduce((s, r) => s + r.rating, 0) / courseReviews.length
+      : null;
+    res.json({ data: courseReviews, averageRating: avg, count: courseReviews.length });
+  } catch (err) {
+    console.error('GET /courses/:courseId/reviews error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/courses/:courseId/reviews — create a review
+router.post('/:courseId/reviews', authenticate, async (req: AuthRequest, res: Response) => {
+  const { rating, reviewText, wouldPlayAgain, difficulty } = req.body;
+  if (!rating || rating < 1 || rating > 5) {
+    res.status(400).json({ error: 'Rating 1-5 required' }); return;
+  }
+  try {
+    const r = await prisma.courseReview.upsert({
+      where:  { courseId_userId: { courseId: req.params.courseId, userId: req.user!.id } },
+      update: { rating, review: reviewText, difficulty, wouldPlayAgain },
+      create: {
+        courseId: req.params.courseId,
+        userId:   req.user!.id,
+        rating,
+        review:   reviewText,
+        difficulty,
+        wouldPlayAgain: wouldPlayAgain ?? true,
+      },
+      include: { user: { select: { id: true, name: true, avatar: true } } },
+    });
+    res.json({ data: r });
+  } catch (err) {
+    console.error('POST /courses/:courseId/reviews error', err);
+    res.status(500).json({ error: 'Failed to save review' });
+  }
+});
+
 // POST /api/courses — create or upsert a course manually
 router.post('/', async (req, res: Response) => {
   try {

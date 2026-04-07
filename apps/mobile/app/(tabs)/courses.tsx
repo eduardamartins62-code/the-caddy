@@ -4,8 +4,8 @@ import {
   TextInput, ActivityIndicator, Linking, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Bookmark, Home, Star, MapPin, Search, SlidersHorizontal } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
 import GlassCard from '../../components/ui/GlassCard';
@@ -14,7 +14,7 @@ import { Colors, Radius, Spacing, Typography } from '../../constants/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type FilterType = 'All' | 'Public' | 'Private' | 'Resort' | 'Par3' | 'NineHole';
+type FilterType = 'All' | 'Public' | 'Private' | 'Municipal' | 'Resort' | 'Par3';
 
 interface Course {
   id: string;
@@ -22,7 +22,9 @@ interface Course {
   city?: string;
   state?: string;
   holes?: number;
+  par?: number;
   rating?: number;
+  slope?: number;
   type?: string;
   lat?: number;
   lng?: number;
@@ -31,18 +33,13 @@ interface Course {
 }
 
 const FILTER_LABELS: { key: FilterType; label: string }[] = [
-  { key: 'All', label: 'All' },
-  { key: 'Public', label: 'Public' },
-  { key: 'Private', label: 'Private' },
-  { key: 'Resort', label: 'Resort' },
-  { key: 'Par3', label: 'Par 3' },
-  { key: 'NineHole', label: '9-Hole' },
+  { key: 'All',       label: 'All' },
+  { key: 'Public',    label: 'Public' },
+  { key: 'Private',   label: 'Private' },
+  { key: 'Municipal', label: 'Municipal' },
+  { key: 'Resort',    label: 'Resort' },
+  { key: 'Par3',      label: 'Par 3' },
 ];
-
-function bookTeeTime(courseName: string) {
-  const url = `https://www.golfnow.com/tee-times/search#search/facility-name=${encodeURIComponent(courseName)}`;
-  WebBrowser.openBrowserAsync(url);
-}
 
 // ─── Course Card ─────────────────────────────────────────────────────────────
 
@@ -50,10 +47,12 @@ function CourseCard({
   course,
   onSetHome,
   isHome,
+  onPress,
 }: {
   course: Course;
   onSetHome: (id: string) => void;
   isHome: boolean;
+  onPress?: () => void;
 }) {
   const openMap = () => {
     if (course.lat && course.lng) {
@@ -71,6 +70,8 @@ function CourseCard({
   const placeholderColors: [string, string] = ['#1A2E1A', '#0A1A0A'];
 
   return (
+    // Spec: tap card → router.push(`/course/${course.id}`)
+    <TouchableOpacity activeOpacity={onPress ? 0.85 : 1} onPress={onPress} disabled={!onPress}>
     <GlassCard style={styles.courseCard} padding={0}>
       {/* Photo / Gradient placeholder */}
       <View style={styles.coursePhotoWrap}>
@@ -78,24 +79,30 @@ function CourseCard({
           <View style={styles.coursePhotoOverlay} />
         </LinearGradient>
 
-        {/* Bookmark icon top-right */}
+        {/* Home badge or bookmark */}
         <TouchableOpacity
           style={styles.bookmarkBtn}
           onPress={() => onSetHome(course.id)}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Bookmark
+          <Ionicons
+            name={isHome ? 'bookmark' : 'bookmark-outline'}
             size={18}
-            stroke={isHome ? Colors.lime : Colors.textSecondary}
-            fill={isHome ? Colors.lime : 'transparent'}
-            strokeWidth={2}
+            color={isHome ? Colors.gold : Colors.textSecondary}
           />
         </TouchableOpacity>
 
         {isHome && (
           <View style={styles.homeBadge}>
-            <Home size={10} stroke={Colors.bg} strokeWidth={2.5} />
+            <Ionicons name="home" size={10} color={Colors.bg} />
             <Text style={styles.homeBadgeText}>Home</Text>
+          </View>
+        )}
+
+        {/* Par badge */}
+        {course.par && (
+          <View style={styles.parBadge}>
+            <Text style={styles.parBadgeText}>Par {course.par}</Text>
           </View>
         )}
       </View>
@@ -115,19 +122,43 @@ function CourseCard({
           {course.rating != null && (
             <>
               <Text style={styles.courseMetaDot}>·</Text>
-              <Star size={11} stroke={Colors.lime} fill={Colors.lime} strokeWidth={0} />
+              <Ionicons name="star" size={11} color={Colors.gold} />
               <Text style={styles.courseMetaText}>{course.rating.toFixed(1)}</Text>
+            </>
+          )}
+          {course.slope != null && (
+            <>
+              <Text style={styles.courseMetaDot}>·</Text>
+              <Text style={styles.courseMetaText}>Slope {course.slope}</Text>
             </>
           )}
         </View>
       </View>
 
-      {/* Map button */}
-      <TouchableOpacity style={styles.mapBtn} onPress={openMap} activeOpacity={0.7}>
-        <MapPin size={14} stroke={Colors.lime} strokeWidth={2} />
-        <Text style={styles.mapBtnText}>Map</Text>
-      </TouchableOpacity>
+      {/* Buttons row */}
+      <View style={styles.courseActions}>
+        <TouchableOpacity
+          style={[styles.courseActionBtn, styles.courseActionBtnPrimary]}
+          onPress={() => onSetHome(course.id)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="home-outline" size={13} color={Colors.gold} />
+          <Text style={styles.courseActionBtnText}>
+            {isHome ? 'Home Course' : 'Set Home'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.courseActionBtn}
+          onPress={openMap}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="map-outline" size={13} color={Colors.teal} />
+          <Text style={[styles.courseActionBtnText, { color: Colors.teal }]}>Open in Maps</Text>
+        </TouchableOpacity>
+      </View>
     </GlassCard>
+    </TouchableOpacity>
   );
 }
 
@@ -135,6 +166,7 @@ function CourseCard({
 
 export default function CoursesScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<FilterType>('All');
@@ -142,6 +174,7 @@ export default function CoursesScreen() {
   const [loading, setLoading] = useState(false);
   const [homeCourse, setHomeCourse] = useState<Course | null>(null);
   const [homeLoading, setHomeLoading] = useState(true);
+  const [searchFocused, setSearchFocused] = useState(false);
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -173,6 +206,7 @@ export default function CoursesScreen() {
     }
 
     setLoading(true);
+    // Spec: debounce 300ms
     debounceTimer.current = setTimeout(async () => {
       try {
         const results = await coursesApi.search(searchQuery);
@@ -182,7 +216,7 @@ export default function CoursesScreen() {
       } finally {
         setLoading(false);
       }
-    }, 400);
+    }, 300);
 
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
@@ -203,8 +237,8 @@ export default function CoursesScreen() {
   // ─── Filter courses locally ──────────────────────────────────────────────
   const filteredCourses = courses.filter(c => {
     if (filterType === 'All') return true;
+    if (filterType === 'Municipal') return c.type?.toLowerCase() === 'municipal';
     if (filterType === 'Par3') return c.holes === 3 || c.type?.toLowerCase() === 'par3';
-    if (filterType === 'NineHole') return c.holes === 9;
     return c.type?.toLowerCase() === filterType.toLowerCase();
   });
 
@@ -215,27 +249,31 @@ export default function CoursesScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Courses</Text>
+        <Text style={styles.headerTitle}>COURSES</Text>
       </View>
 
       {/* Search bar */}
       <View style={styles.searchRow}>
-        <View style={styles.searchInputWrap}>
-          <Search size={16} stroke={Colors.textSecondary} strokeWidth={2} />
+        <View style={[styles.searchInputWrap, searchFocused && styles.searchInputWrapFocused]}>
+          <Ionicons name="search-outline" size={16} color={searchFocused ? Colors.gold : Colors.textSecondary} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search Course"
+            placeholder="Search courses..."
             placeholderTextColor={Colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
             returnKeyType="search"
             autoCapitalize="none"
             autoCorrect={false}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
+            </TouchableOpacity>
+          )}
         </View>
-        <TouchableOpacity style={styles.filterIconBtn}>
-          <SlidersHorizontal size={18} stroke={Colors.textSecondary} strokeWidth={2} />
-        </TouchableOpacity>
       </View>
 
       {/* Filter chips */}
@@ -273,11 +311,27 @@ export default function CoursesScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Home Course section at top if set */}
+        {!homeLoading && homeCourse && !showResults && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="home" size={13} color={Colors.gold} />
+              <Text style={styles.sectionLabel}>YOUR HOME COURSE</Text>
+            </View>
+            <CourseCard
+              course={homeCourse}
+              onSetHome={handleSetHome}
+              isHome={true}
+              onPress={() => router.push(`/course/${homeCourse.id}` as any)}
+            />
+          </View>
+        )}
+
         {/* Home Course prompt — only if no home course and not searching */}
         {!homeLoading && !homeCourse && showEmptySearch && (
-          <GlassCard style={styles.setHomeCard} glow="lime">
+          <GlassCard style={styles.setHomeCard}>
             <View style={styles.setHomeRow}>
-              <MapPin size={20} stroke={Colors.lime} strokeWidth={2} />
+              <Ionicons name="location-outline" size={20} color={Colors.gold} />
               <View style={styles.setHomeText}>
                 <Text style={styles.setHomeTitle}>Choose Your Home Course</Text>
                 <Text style={styles.setHomeSubtitle}>Pick the course you play most often</Text>
@@ -287,33 +341,18 @@ export default function CoursesScreen() {
           </GlassCard>
         )}
 
-        {/* Home Course card */}
-        {!homeLoading && homeCourse && !showResults && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Home size={13} stroke={Colors.lime} strokeWidth={2} />
-              <Text style={styles.sectionLabel}>YOUR HOME COURSE</Text>
-            </View>
-            <CourseCard
-              course={homeCourse}
-              onSetHome={handleSetHome}
-              isHome={true}
-            />
-          </View>
-        )}
-
         {/* Loading */}
         {loading && (
           <View style={styles.centeredState}>
-            <ActivityIndicator color={Colors.lime} size="large" />
+            <ActivityIndicator color={Colors.gold} size="large" />
           </View>
         )}
 
-        {/* Empty search hint */}
+        {/* Empty search initial state */}
         {showEmptySearch && (
           <View style={styles.centeredState}>
-            <Search size={36} stroke={Colors.textMuted} strokeWidth={1.5} />
-            <Text style={styles.emptyText}>Type to search for a course</Text>
+            <Ionicons name="search-outline" size={36} color={Colors.textMuted} />
+            <Text style={styles.emptyText}>Search for a course</Text>
             <Text style={styles.emptySubtext}>Search by name, city, or state</Text>
           </View>
         )}
@@ -337,6 +376,7 @@ export default function CoursesScreen() {
                     course={course}
                     onSetHome={handleSetHome}
                     isHome={homeCourse?.id === course.id}
+                    onPress={() => router.push(`/course/${course.id}` as any)}
                   />
                 ))}
               </>
@@ -359,46 +399,33 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   headerTitle: {
-    color: Colors.textPrimary,
-    fontSize: Typography.xl,
-    fontWeight: '800',
-    letterSpacing: -0.5,
+    color: Colors.gold,
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: 2,
   },
 
   // Search bar
   searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
     paddingHorizontal: Spacing.md,
     paddingVertical: 10,
   },
   searchInputWrap: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     backgroundColor: Colors.bgSecondary,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.cardBorder,
+    borderRadius: Radius.lg,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
+  searchInputWrapFocused: { borderColor: Colors.gold },
   searchInput: {
     flex: 1,
     color: Colors.textPrimary,
     fontSize: Typography.md,
-  },
-  filterIconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.bgSecondary,
-    borderWidth: 1,
-    borderColor: Colors.cardBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 
   // Filter chips
@@ -418,8 +445,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.cardBorder,
   },
   filterChipActive: {
-    backgroundColor: Colors.limeDim,
-    borderColor: Colors.lime + '60',
+    backgroundColor: Colors.goldDim,
+    borderColor: Colors.gold + '60',
   },
   filterChipText: {
     color: Colors.textSecondary,
@@ -427,7 +454,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   filterChipTextActive: {
-    color: Colors.lime,
+    color: Colors.gold,
   },
 
   // List
@@ -442,9 +469,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sectionLabel: {
-    color: Colors.lime,
+    color: Colors.gold,
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '700',
     letterSpacing: 1.5,
   },
 
@@ -499,7 +526,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: Colors.lime,
+    backgroundColor: Colors.gold,
     borderRadius: Radius.pill,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -509,6 +536,18 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
   },
+  parBadge: {
+    position: 'absolute',
+    bottom: 8,
+    left: 10,
+    backgroundColor: 'rgba(10,10,15,0.7)',
+    borderRadius: Radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: Colors.gold + '40',
+  },
+  parBadgeText: { color: Colors.gold, fontSize: 10, fontWeight: '700' },
   courseInfo: {
     padding: 12,
     paddingBottom: 6,
@@ -536,18 +575,29 @@ const styles = StyleSheet.create({
   courseMetaDot: {
     color: Colors.textMuted,
   },
-  mapBtn: {
+
+  // Course action buttons
+  courseActions: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: Colors.cardBorder,
     marginTop: 2,
   },
-  mapBtnText: {
-    color: Colors.lime,
+  courseActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  courseActionBtnPrimary: {
+    borderRightWidth: 1,
+    borderRightColor: Colors.cardBorder,
+  },
+  courseActionBtnText: {
+    color: Colors.gold,
     fontSize: Typography.sm,
     fontWeight: '600',
   },

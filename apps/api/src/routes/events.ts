@@ -20,8 +20,8 @@ router.get('/', async (_req, res: Response) => {
 // POST /api/events
 router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   const {
-    name, description, type = 'TOURNAMENT', format = 'STROKE_PLAY',
-    recurrence = 'ONE_TIME', recurrenceNote, privacy = 'INVITE_ONLY',
+    name, description, type = 'TOURNAMENT', scoringFormat = 'GROSS', customScoringNote,
+    handicapAllowance = 100, recurrence = 'ONE_TIME', recurrenceNote, privacy = 'INVITE_ONLY',
     startDate, endDate, location, courseId, participants = [],
   } = req.body;
 
@@ -30,7 +30,8 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
 
   const event = await prisma.event.create({
     data: {
-      name: name.trim(), description, type, format, recurrence, recurrenceNote,
+      name: name.trim(), description, type, scoringFormat, customScoringNote,
+      handicapAllowance, recurrence, recurrenceNote,
       privacy, startDate: new Date(startDate),
       endDate: endDate ? new Date(endDate) : null,
       location, courseId, createdBy: req.user!.id,
@@ -219,6 +220,9 @@ router.get('/:id/leaderboard', async (req, res: Response) => {
     const handicap = user.handicap || 0;
     let grossScore = 0;
     let holesPlayed = 0;
+    let birdieCount = 0;
+    let eagleCount = 0;
+    let holesInOne = 0;
     const roundScores: Record<string, number> = {};
 
     for (const round of event.rounds) {
@@ -229,12 +233,25 @@ router.get('/:id/leaderboard', async (req, res: Response) => {
         grossScore  += roundGross;
         holesPlayed += userScores.length;
       }
+      for (const score of userScores) {
+        const hole = round.holes.find(h => h.holeNumber === score.holeNumber);
+        if (hole) {
+          const diff = score.strokes - hole.par;
+          if (score.strokes === 1) holesInOne++;
+          if (diff <= -2) eagleCount++;
+          else if (diff === -1) birdieCount++;
+        }
+      }
     }
 
-    const netScore = grossScore - handicap;
+    const netScore = event.scoringFormat === 'NET_HANDICAP'
+      ? grossScore - Math.round(handicap * event.handicapAllowance / 100)
+      : grossScore - handicap;
+
     return {
       user:       { id: user.id, name: user.name, avatar: user.avatar, handicap },
       grossScore, netScore, holesPlayed, roundScores,
+      birdieCount, eagleCount, holesInOne,
     };
   });
 
@@ -246,6 +263,53 @@ router.get('/:id/leaderboard', async (req, res: Response) => {
   }));
 
   res.json({ data: ranked });
+});
+
+// GET /api/events/:id/rounds
+router.get('/:id/rounds', async (req, res: Response) => {
+  try {
+    const rounds = await prisma.round.findMany({
+      where:   { eventId: req.params.id },
+      orderBy: { date: 'asc' },
+      include: {
+        holes:  { orderBy: { holeNumber: 'asc' } },
+        scores: true,
+      },
+    });
+    res.json({ data: rounds });
+  } catch (err) {
+    console.error('GET /events/:id/rounds error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/events/:id/rsvp
+router.put('/:id/rsvp', authenticate, async (req: AuthRequest, res: Response) => {
+  const { status } = req.body;
+  try {
+    const participant = await prisma.eventParticipant.upsert({
+      where: { eventId_userId: { eventId: req.params.id, userId: req.user!.id } },
+      update: { status, respondedAt: new Date() },
+      create: { eventId: req.params.id, userId: req.user!.id, role: 'PLAYER', status },
+    });
+    if (status === 'ACCEPTED') {
+      const [event, rsvpUser] = await Promise.all([
+        prisma.event.findUnique({ where: { id: req.params.id }, select: { createdBy: true, name: true } }),
+        prisma.user.findUnique({ where: { id: req.user!.id }, select: { name: true } }),
+      ]);
+      if (event) {
+        await prisma.notification.create({
+          data: { userId: event.createdBy, type: 'RSVP_ACCEPTED',
+            title: 'RSVP Accepted', body: `${rsvpUser?.name ?? 'Someone'} accepted your invite to ${event.name}`,
+            data: JSON.stringify({ eventId: req.params.id }) }
+        });
+      }
+    }
+    res.json({ data: participant });
+  } catch (err) {
+    console.error('PUT /events/:id/rsvp error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // GET /api/events/:id/itinerary
@@ -399,16 +463,19 @@ router.post('/:id/history', authenticate, async (req: AuthRequest, res: Response
     const isOrganizer = event.createdBy === req.user!.id;
     if (!isOrganizer) { res.status(403).json({ error: 'Only the organizer can add history' }); return; }
 
-    const { year, champion, winningScore, coursePlayed, recap, photos } = req.body;
+    const { year, championName, championId, courseId, winningScore, coursePlayed, recap, photos } = req.body;
     if (!year) { res.status(400).json({ error: 'Year is required' }); return; }
+    if (!championName) { res.status(400).json({ error: 'championName is required' }); return; }
 
     const entry = await prisma.historyEntry.upsert({
       where: { eventId_year: { eventId: req.params.id, year: parseInt(year) } },
-      update: { champion, winningScore: winningScore ? parseInt(winningScore) : null, coursePlayed, recap },
+      update: { championName, championId, courseId, winningScore: winningScore ? parseInt(winningScore) : null, coursePlayed, recap },
       create: {
         eventId: req.params.id,
         year: parseInt(year),
-        champion,
+        championName,
+        championId,
+        courseId,
         winningScore: winningScore ? parseInt(winningScore) : null,
         coursePlayed,
         recap,

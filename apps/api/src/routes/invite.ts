@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticate as requireAuth, AuthRequest } from '../middleware/auth';
 
@@ -11,14 +11,11 @@ async function isInviteOnly(): Promise<boolean> {
 }
 
 // Validate invite code
-router.post('/validate', async (req, res) => {
+router.post('/validate', async (req, res: Response) => {
   const { code } = req.body;
-  if (!code) return res.status(400).json({ error: 'Code required' });
+  if (!code) { res.json({ valid: false }); return; }
   const invite = await prisma.inviteCode.findUnique({ where: { code: code.toUpperCase() } });
-  if (!invite || !invite.isActive || invite.usedById) {
-    return res.status(400).json({ error: 'Invalid or already used invite code' });
-  }
-  res.json({ valid: true });
+  res.json({ valid: !!(invite?.isActive && !invite.usedById) });
 });
 
 // Check invite-only status (public)
@@ -28,15 +25,13 @@ router.get('/status', async (_req, res) => {
 });
 
 // Waitlist signup
-router.post('/waitlist', async (req, res) => {
+router.post('/waitlist', async (req, res: Response) => {
   const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'Email required' });
+  if (!email) { res.status(400).json({ error: 'Email required' }); return; }
   try {
-    await prisma.waitlist.create({ data: { email } });
+    await prisma.waitlist.upsert({ where: { email }, update: {}, create: { email } });
     res.json({ success: true });
-  } catch {
-    res.status(409).json({ error: 'Already on waitlist' });
-  }
+  } catch { res.status(500).json({ error: 'Failed' }); }
 });
 
 // Admin: generate invite code
@@ -55,6 +50,19 @@ router.get('/codes', requireAuth, async (req: AuthRequest, res) => {
     orderBy: { createdAt: 'desc' },
   });
   res.json(codes);
+});
+
+// GET /api/invite/settings — returns { inviteOnly: boolean }
+router.get('/settings', async (_req, res) => {
+  const inviteOnly = await isInviteOnly();
+  res.json({ inviteOnly });
+});
+
+// GET /api/invite/waitlist — SUPER_ADMIN lists waitlist
+router.get('/waitlist', requireAuth, async (req: AuthRequest, res) => {
+  if (req.user!.role !== 'SUPER_ADMIN') return res.status(403).json({ error: 'Forbidden' });
+  const waitlist = await prisma.waitlist.findMany({ orderBy: { createdAt: 'desc' } });
+  res.json(waitlist);
 });
 
 // Admin: toggle invite-only mode

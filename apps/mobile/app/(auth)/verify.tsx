@@ -11,10 +11,23 @@ import { authApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { Colors, Radius, Spacing } from '../../constants/theme';
 
-const RESEND_TIMEOUT = 30;
+const RESEND_TIMEOUT = 60;
 
 export default function VerifyScreen() {
-  const { contact, via } = useLocalSearchParams<{ contact: string; via: 'email' | 'phone' }>();
+  const { contact: rawContact, via } = useLocalSearchParams<{ contact: string; via: 'email' | 'phone' }>();
+  // Spec: mask the contact — "j***@gmail.com" for email, "***-***-1234" for phone
+  const contact = rawContact ?? '';
+  function maskContact(c: string): string {
+    if (!c) return '';
+    if (c.includes('@')) {
+      const [local, domain] = c.split('@');
+      return `${local[0]}***@${domain}`;
+    }
+    // phone: show last 4 digits
+    const digits = c.replace(/\D/g, '');
+    return `***-***-${digits.slice(-4)}`;
+  }
+  const maskedContact = maskContact(contact);
   const [code, setCode]         = useState(['', '', '', '', '', '']);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
@@ -43,6 +56,10 @@ export default function VerifyScreen() {
       setCode(newCode);
       const next = Math.min(index + digits.length, 5);
       inputs.current[next]?.focus();
+      // Auto-submit if all 6 filled by paste
+      if (newCode.every(d => d !== '')) {
+        setTimeout(() => handleVerifyCode(newCode), 0);
+      }
       return;
     }
     const newCode = [...code];
@@ -50,6 +67,13 @@ export default function VerifyScreen() {
     setCode(newCode);
     if (value && index < 5) {
       inputs.current[index + 1]?.focus();
+    }
+    // Auto-submit when last box filled
+    if (value && index === 5) {
+      const fullCode = [...newCode];
+      if (fullCode.every(d => d !== '')) {
+        setTimeout(() => handleVerifyCode(fullCode), 0);
+      }
     }
   }
 
@@ -62,24 +86,30 @@ export default function VerifyScreen() {
     }
   }
 
+  // Spec: exact shake animation
   function shake() {
     Animated.sequence([
-      Animated.timing(shakeAnim, { toValue: 10, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -10, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 8, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -8, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
     ]).start();
   }
 
-  async function handleVerify() {
-    const fullCode = code.join('');
+  async function handleVerifyCode(codeArr?: string[]) {
+    const fullCode = (codeArr ?? code).join('');
     if (fullCode.length !== 6) { setError('Enter all 6 digits'); return; }
     setError('');
     setLoading(true);
     try {
-      const result = await authApi.verifyOtp(contact!, fullCode, via ?? 'email');
+      const result = await authApi.verifyOtp(contact, fullCode, via ?? 'email');
       await signIn(result.token, result.user);
+      // Spec: if user.isOnboarded → home, else → onboarding
+      if (result.user?.isOnboarded || (result.user as any)?.onboardingComplete) {
+        router.replace('/(tabs)/home');
+      } else {
+        router.replace('/onboarding');
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Invalid code. Try again.');
       setCode(['', '', '', '', '', '']);
@@ -89,6 +119,8 @@ export default function VerifyScreen() {
       setLoading(false);
     }
   }
+
+  const handleVerify = () => handleVerifyCode();
 
   async function handleResend() {
     if (resendTimer > 0 || resending) return;
@@ -121,8 +153,12 @@ export default function VerifyScreen() {
           <Text style={styles.title}>Enter your code</Text>
           <Text style={styles.sub}>
             Sent to{' '}
-            <Text style={styles.contactHighlight}>{contact}</Text>
+            <Text style={styles.contactHighlight}>{maskedContact}</Text>
           </Text>
+          {/* Spec: "Wrong contact?" → router.back() */}
+          <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 8 }}>
+            <Text style={styles.wrongContactLink}>Wrong contact? Go back</Text>
+          </TouchableOpacity>
         </View>
 
         {/* OTP boxes */}
@@ -308,4 +344,11 @@ const styles = StyleSheet.create({
   resendLabel: { color: Colors.textSecondary, fontSize: 13, fontFamily: 'DMSans_400Regular' },
   resendTimer: { color: Colors.textMuted, fontSize: 13, fontFamily: 'DMSans_400Regular' },
   resendLink: { color: Colors.gold, fontSize: 13, fontFamily: 'DMSans_500Medium' },
+  wrongContactLink: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    textDecorationLine: 'underline',
+    textAlign: 'center',
+  },
 });

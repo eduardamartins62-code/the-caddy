@@ -22,7 +22,7 @@ function normalizePhone(input: string): string {
 const USER_SELECT = {
   id: true, email: true, phone: true, name: true, username: true, avatar: true,
   bio: true, handicap: true, homeCourse: true, location: true,
-  role: true, createdAt: true, onboardingComplete: true, isPrivate: true,
+  role: true, createdAt: true, isOnboarded: true, isPrivate: true,
 };
 
 // POST /api/auth/request-otp
@@ -55,7 +55,7 @@ router.post('/request-otp', async (req: Request, res: Response) => {
         email: `phone_${normalized.replace(/\+/g, '')}@thecaddy.local`,
         phone: normalized,
         name: '',
-        onboardingComplete: false,
+        isOnboarded: false,
         otpCode: code,
         otpExpiresAt: expiresAt,
       },
@@ -74,7 +74,7 @@ router.post('/request-otp', async (req: Request, res: Response) => {
     create: {
       email: emailLower,
       name: '',
-      onboardingComplete: false,
+      isOnboarded: false,
       otpCode: code,
       otpExpiresAt: expiresAt,
     },
@@ -141,7 +141,7 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
       homeCourse:         user.homeCourse,
       location:           user.location,
       role:               user.role,
-      onboardingComplete: user.onboardingComplete,
+      isOnboarded: user.isOnboarded,
       isPrivate:          user.isPrivate,
       createdAt:          user.createdAt,
     },
@@ -204,7 +204,7 @@ router.post('/social', async (req: Request, res: Response) => {
       avatar:             avatar ?? null,
       googleId:           googleId ?? null,
       appleId:            appleId ?? null,
-      onboardingComplete: false,
+      isOnboarded: false,
     },
     select: USER_SELECT,
   });

@@ -38,7 +38,7 @@ interface SocialPost {
   user?: {
     id: string;
     name: string;
-    username?: string;
+    username?: string | null;
     avatar?: string | null;
   };
 }
@@ -367,8 +367,13 @@ function PostCard({
           </TouchableOpacity>
         )}
 
+        {/* Spec: own posts show three-dot menu with Delete option */}
         {isOwn && (
-          <Pressable onLongPress={() => onDelete(post)} hitSlop={12}>
+          <Pressable
+            onPress={() => onDelete(post)}
+            hitSlop={12}
+            accessibilityLabel="Post options"
+          >
             <Ionicons name="ellipsis-horizontal" size={18} color={Colors.textMuted} />
           </Pressable>
         )}
@@ -590,10 +595,11 @@ function ComposeModal({ visible, onClose, onPosted }: ComposeModalProps) {
   const [content, setContent] = useState('');
   const [courseTag, setCourseTag] = useState('');
   const [mediaUri, setMediaUri] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!visible) { setContent(''); setCourseTag(''); setMediaUri(null); }
+    if (!visible) { setContent(''); setCourseTag(''); setMediaUri(null); setMediaType(null); }
   }, [visible]);
 
   async function pickMedia() {
@@ -602,7 +608,11 @@ function ComposeModal({ visible, onClose, onPosted }: ComposeModalProps) {
       quality: 0.85,
       allowsEditing: true,
     });
-    if (!result.canceled) setMediaUri(result.assets[0].uri);
+    if (!result.canceled) {
+      const asset = result.assets[0];
+      setMediaUri(asset.uri);
+      setMediaType(asset.type === 'video' ? 'video' : 'image');
+    }
   }
 
   async function handlePost() {
@@ -617,12 +627,12 @@ function ComposeModal({ visible, onClose, onPosted }: ComposeModalProps) {
         token = await SecureStore.getItemAsync('auth_token');
       }
 
-      if (mediaUri) {
+      if (mediaUri && mediaType) {
         const formData = new FormData();
         formData.append('content', content.trim());
         if (courseTag.trim()) formData.append('courseTag', courseTag.trim());
-        const filename = mediaUri.split('/').pop()!;
-        const type = filename.endsWith('.mp4') || filename.endsWith('.mov') ? 'video/mp4' : 'image/jpeg';
+        const filename = mediaUri.split('/').pop() || (mediaType === 'video' ? 'video.mp4' : 'photo.jpg');
+        const type = mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
         formData.append('media', { uri: mediaUri, name: filename, type } as unknown as Blob);
         await fetch(`${API_BASE}/posts`, {
           method: 'POST',
@@ -703,8 +713,15 @@ function ComposeModal({ visible, onClose, onPosted }: ComposeModalProps) {
           {/* Media preview */}
           {mediaUri && (
             <View style={cmStyles.mediaWrap}>
-              <Image source={{ uri: mediaUri }} style={cmStyles.mediaPreview} resizeMode="cover" />
-              <TouchableOpacity style={cmStyles.removeMedia} onPress={() => setMediaUri(null)}>
+              {mediaType === 'video' ? (
+                <View style={[cmStyles.mediaPreview, { backgroundColor: Colors.bgTertiary, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Ionicons name="videocam" size={40} color={Colors.textSecondary} />
+                  <Text style={{ color: Colors.textSecondary, fontSize: 12, marginTop: 6 }}>Video selected</Text>
+                </View>
+              ) : (
+                <Image source={{ uri: mediaUri }} style={cmStyles.mediaPreview} resizeMode="cover" />
+              )}
+              <TouchableOpacity style={cmStyles.removeMedia} onPress={() => { setMediaUri(null); setMediaType(null); }}>
                 <Ionicons name="close-circle" size={26} color={Colors.error} />
               </TouchableOpacity>
             </View>
@@ -807,6 +824,7 @@ export default function SocialScreen() {
 
   // ── Infinite feed query ───────────────────────────────────────────────────
 
+  // Spec: fix useInfiniteQuery to prevent post duplication
   const {
     data: feedData,
     isLoading,
@@ -816,13 +834,15 @@ export default function SocialScreen() {
     refetch,
   } = useInfiniteQuery({
     queryKey: ['feed', tab],
-    queryFn: ({ pageParam }: { pageParam?: string }) => postsApi.getFeed(tab, pageParam),
-    getNextPageParam: (lastPage) =>
-      lastPage.hasMore && lastPage.nextCursor ? lastPage.nextCursor : undefined,
+    queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
+      return postsApi.getFeed(tab as any, pageParam);
+    },
+    getNextPageParam: (lastPage: any) => lastPage?.hasMore ? (lastPage.nextCursor ?? undefined) : undefined,
     initialPageParam: undefined as string | undefined,
   });
 
-  const posts: SocialPost[] = feedData?.pages.flatMap(p => p.items) ?? [];
+  // Guard: p.items may not exist if API returns array directly
+  const posts: SocialPost[] = feedData?.pages.flatMap((p: any) => p.items ?? p) ?? [];
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

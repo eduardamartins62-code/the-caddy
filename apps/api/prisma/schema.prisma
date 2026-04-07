@@ -31,7 +31,7 @@ model User {
   homeCourseId       String?
   location           String?
   role               String   @default("USER")
-  onboardingComplete Boolean  @default(true)
+  isOnboarded        Boolean  @default(false)
   googleId           String?  @unique
   appleId            String?  @unique
   pushToken          String?
@@ -86,9 +86,11 @@ model Event {
   recurrence     String   @default("ONE_TIME")
   recurrenceNote String?
   privacy        String   @default("INVITE_ONLY")
-  status         String   @default("UPCOMING")
-  format         String    @default("STROKE_PLAY")
-  startDate      DateTime
+  status             String   @default("UPCOMING")
+  scoringFormat      String   @default("GROSS")   // GROSS | NET_HANDICAP | CUSTOM
+  customScoringNote  String?
+  handicapAllowance  Int      @default(100)
+  startDate          DateTime
   endDate        DateTime?
   location       String?
   courseId       String?
@@ -190,10 +192,11 @@ model Round {
 }
 
 model RoundHole {
-  id         String @id @default(cuid())
-  roundId    String
-  holeNumber Int
-  par        Int
+  id          String @id @default(cuid())
+  roundId     String
+  holeNumber  Int
+  par         Int
+  strokeIndex Int?
 
   round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
 
@@ -222,9 +225,10 @@ model HandicapRecord {
   id            String   @id @default(cuid())
   userId        String
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roundId       String?  // Optional: the round that triggered this calculation
   handicapIndex Float
+  differential  Float    // Score differential for this record
   calculatedAt  DateTime @default(now())
-  roundsUsed    Int      // How many rounds used in calculation
 }
 
 model ItineraryItem {
@@ -253,7 +257,7 @@ model SocialPost {
   courseTag String?
   courseId  String?
   location  String?
-  postType  String   @default("MOMENT") // MOMENT | SCORE
+  postType  String   @default("POST") // POST | SCORE
   roundId   String?
   likes     Int      @default(0)
   createdAt DateTime @default(now())
@@ -289,16 +293,17 @@ model Comment {
 }
 
 model HistoryEntry {
-  id           String   @id @default(cuid())
-  eventId      String
-  year         Int
-  champion     String
-  winningScore Int?
-  coursePlayed String?
-  recap        String?
-  photos       String   @default("[]") // JSON-encoded string array (legacy)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id @default(cuid())
+  eventId       String
+  year          Int
+  championId    String?
+  championName  String
+  courseId      String?
+  winningScore  Int?
+  coursePlayed  String?
+  recap         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
   historyPhotos HistoryPhoto[]
@@ -368,6 +373,8 @@ model InviteCode {
   usedById    String?   @unique
   usedAt      DateTime?
   isActive    Boolean   @default(true)
+  maxUses     Int       @default(1)
+  expiresAt   DateTime?
   createdAt   DateTime  @default(now())
 
   createdBy User  @relation("InviteCreated", fields: [createdById], references: [id])
@@ -418,7 +425,8 @@ model EventTemplate {
 }
 
 model AppSetting {
-  id    String @id @default(cuid())
-  key   String @unique
-  value String // JSON or plain string
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   // JSON or plain string
+  updatedAt DateTime @updatedAt
 }

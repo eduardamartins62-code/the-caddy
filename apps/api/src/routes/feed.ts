@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { prisma } from '../lib/prisma';
+import prisma from '../lib/prisma';
 import { authenticate as requireAuth, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
-// GET /api/feed/activity — friend activity feed
+// GET /api/feed/activity — friend activity feed (last 20 items)
 router.get('/activity', requireAuth, async (req: AuthRequest, res) => {
   try {
     const following = await prisma.follow.findMany({
@@ -20,10 +20,17 @@ router.get('/activity', requireAuth, async (req: AuthRequest, res) => {
         where: { userId: { in: friendIds } },
         include: {
           user: { select: { id: true, name: true, avatar: true } },
-          round: { select: { courseName: true, id: true } },
+          round: {
+            select: {
+              id: true,
+              courseName: true,
+              eventId: true,
+              holes: { select: { holeNumber: true, par: true } },
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
-        take: 20,
+        take: 50,
       }),
       prisma.socialPost.findMany({
         where: { userId: { in: friendIds } },
@@ -44,46 +51,75 @@ router.get('/activity', requireAuth, async (req: AuthRequest, res) => {
 
     const activities: any[] = [];
 
-    // Aggregate scores into round completions
-    const roundScores = new Map<string, any>();
+    // Aggregate scores into round completions AND birdie highlights
+    const roundMap = new Map<string, any>();
     for (const score of recentScores) {
-      if (!roundScores.has(score.roundId)) {
-        roundScores.set(score.roundId, { ...score, totalStrokes: 0, holeCount: 0 });
+      const key = `${score.roundId}:${score.userId}`;
+      if (!roundMap.has(key)) {
+        roundMap.set(key, { ...score, totalStrokes: 0, holeCount: 0, birdies: [] });
       }
-      const entry = roundScores.get(score.roundId);
+      const entry = roundMap.get(key);
       entry.totalStrokes += score.strokes;
       entry.holeCount++;
+
+      // Check for birdie: strokes = par - 1
+      const hole = score.round.holes.find((h: { holeNumber: number; par: number }) => h.holeNumber === score.holeNumber);
+      if (hole && score.strokes === hole.par - 1) {
+        entry.birdies.push({ holeNumber: score.holeNumber, par: hole.par, strokes: score.strokes });
+      }
     }
-    for (const [roundId, entry] of roundScores) {
+
+    for (const [, entry] of roundMap) {
+      // Round completed activity
       activities.push({
-        type: 'ROUND_SCORE',
-        userId: entry.userId,
-        user: entry.user,
-        text: `finished a round at ${entry.round.courseName} — shot ${entry.totalStrokes}`,
-        navigateTo: `/round/${roundId}`,
-        createdAt: entry.createdAt,
+        type:        'round_completed',
+        userId:      entry.userId,
+        userName:    entry.user.name,
+        userAvatar:  entry.user.avatar,
+        text:        `finished a round at ${entry.round.courseName} — shot ${entry.totalStrokes}`,
+        entityId:    entry.roundId,
+        entityType:  'round',
+        createdAt:   entry.createdAt,
       });
+
+      // Birdie activities
+      for (const birdie of entry.birdies) {
+        activities.push({
+          type:        'birdie',
+          userId:      entry.userId,
+          userName:    entry.user.name,
+          userAvatar:  entry.user.avatar,
+          text:        `made a birdie on hole ${birdie.holeNumber} (par ${birdie.par}) at ${entry.round.courseName}`,
+          entityId:    entry.roundId,
+          entityType:  'round',
+          createdAt:   entry.createdAt,
+        });
+      }
     }
 
     for (const post of recentPosts) {
       activities.push({
-        type: 'POST',
-        userId: post.userId,
-        user: post.user,
-        text: `posted ${post.imageUrl ? 'a photo' : post.videoUrl ? 'a video' : 'something'}`,
-        navigateTo: null,
-        createdAt: post.createdAt,
+        type:        'post',
+        userId:      post.userId,
+        userName:    post.user.name,
+        userAvatar:  post.user.avatar,
+        text:        post.content.length > 100 ? post.content.slice(0, 97) + '…' : post.content,
+        entityId:    post.id,
+        entityType:  'post',
+        createdAt:   post.createdAt,
       });
     }
 
     for (const p of recentParticipants) {
       activities.push({
-        type: 'EVENT_JOIN',
-        userId: p.userId,
-        user: p.user,
-        text: `joined ${p.event.name}`,
-        navigateTo: `/event/${p.event.id}`,
-        createdAt: p.createdAt,
+        type:        'event_join',
+        userId:      p.userId,
+        userName:    p.user.name,
+        userAvatar:  p.user.avatar,
+        text:        `joined ${p.event.name}`,
+        entityId:    p.event.id,
+        entityType:  'event',
+        createdAt:   p.createdAt,
       });
     }
 

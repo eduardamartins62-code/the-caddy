@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { prisma } from '../lib/prisma';
-import { authenticate as requireAuth } from '../middleware/auth';
+import prisma from '../lib/prisma';
+import { authenticate as requireAuth, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -17,6 +17,53 @@ const BADGE_DEFINITIONS: Record<string, { name: string; description: string }> =
   CHAMPION:         { name: 'Champion',          description: 'Win a tournament event' },
 };
 
+function buildBadgeList(badges: { type: string; earnedAt: Date }[]) {
+  return Object.entries(BADGE_DEFINITIONS).map(([type, def]) => ({
+    type,
+    ...def,
+    earned: badges.find(b => b.type === type) || null,
+    locked: !badges.some(b => b.type === type),
+  }));
+}
+
+// GET /api/badges/me — current user's earned badges + all possible badges
+router.get('/me', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const badges = await prisma.badge.findMany({
+      where: { userId: req.user!.id },
+      orderBy: { earnedAt: 'desc' },
+    });
+    res.json({ earnedCount: badges.length, badges: buildBadgeList(badges) });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch badges' });
+  }
+});
+
+// GET /api/badges/user/:id — another user's badges
+router.get('/user/:id', requireAuth, async (req, res) => {
+  try {
+    const badges = await prisma.badge.findMany({
+      where: { userId: req.params.id },
+      orderBy: { earnedAt: 'desc' },
+    });
+    res.json({ earnedCount: badges.length, badges: buildBadgeList(badges) });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch badges' });
+  }
+});
+
+// POST /api/badges/check — trigger badge check for current user (or userId in body)
+router.post('/check', requireAuth, async (req: AuthRequest, res) => {
+  const userId = (req.body?.userId as string) || req.user!.id;
+  try {
+    const awarded = await checkAndAwardBadges(userId);
+    res.json({ awarded });
+  } catch (err) {
+    res.status(500).json({ error: 'Badge check failed' });
+  }
+});
+
+// Legacy: GET /api/badges/:userId
 router.get('/:userId', requireAuth, async (req, res) => {
   try {
     const badges = await prisma.badge.findMany({

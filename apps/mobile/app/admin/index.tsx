@@ -22,6 +22,7 @@ const QUICK_ACTIONS = [
     route: '/admin/players',
     icon: 'people-outline' as const,
     color: '#3B82F6',
+    superAdminOnly: false,
   },
   {
     label: 'Manage Rounds',
@@ -29,6 +30,7 @@ const QUICK_ACTIONS = [
     route: '/admin/rounds',
     icon: 'flag-outline' as const,
     color: Colors.lime,
+    superAdminOnly: false,
   },
   {
     label: 'Score Entry',
@@ -36,6 +38,7 @@ const QUICK_ACTIONS = [
     route: '/admin/scores',
     icon: 'clipboard-outline' as const,
     color: Colors.purple,
+    superAdminOnly: false,
   },
   {
     label: 'Event History',
@@ -43,6 +46,15 @@ const QUICK_ACTIONS = [
     route: '/admin/history',
     icon: 'time-outline' as const,
     color: '#F97316',
+    superAdminOnly: false,
+  },
+  {
+    label: 'Invite Codes',
+    sub: 'Manage invite codes & waitlist',
+    route: '/admin/invites',
+    icon: 'mail-outline' as const,
+    color: '#EC4899',
+    superAdminOnly: true,
   },
 ];
 
@@ -178,7 +190,9 @@ export default function AdminDashboard() {
         {/* ── Quick Actions ── */}
         <Text style={[styles.sectionLabel, { marginTop: 24 }]}>MANAGEMENT</Text>
         <View style={styles.actionsGrid}>
-          {QUICK_ACTIONS.map(action => (
+          {QUICK_ACTIONS.filter(action =>
+            !action.superAdminOnly || user?.role === 'SUPER_ADMIN'
+          ).map(action => (
             <TouchableOpacity
               key={action.label}
               style={styles.actionCard}

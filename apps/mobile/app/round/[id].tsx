@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   Modal, RefreshControl, ActivityIndicator, Alert,
@@ -444,6 +444,24 @@ export default function RoundDetailScreen() {
   const [activeTab, setActiveTab]     = useState<RoundTab>('scorecard');
 
   const [addSkinsLoading, setAddSkinsLoading] = useState(false);
+  const [weather, setWeather] = useState<any>(null);
+
+  useEffect(() => {
+    if (!round?.golfCourse?.latitude || !round?.golfCourse?.longitude) return;
+    const roundDate = round.date ? new Date(round.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+    const today = new Date();
+    const diff = Math.abs((new Date(roundDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (diff > 7) return;
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${round.golfCourse.latitude}&longitude=${round.golfCourse.longitude}&daily=temperature_2m_max,precipitation_probability_max,windspeed_10m_max&temperature_unit=fahrenheit&timezone=auto&start_date=${roundDate}&end_date=${roundDate}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.daily) setWeather({
+          temp: Math.round(d.daily.temperature_2m_max[0]),
+          rain: d.daily.precipitation_probability_max[0],
+          wind: Math.round(d.daily.windspeed_10m_max[0]),
+        });
+      }).catch(() => {});
+  }, [round]);
 
   // Bets queries — lazy, only when Bets tab is active
   const { data: skinsData, isLoading: skinsLoading } = useQuery({
@@ -494,13 +512,13 @@ export default function RoundDetailScreen() {
   const isAdmin = user?.role === 'SCOREKEEPER' || user?.role === 'SUPER_ADMIN';
 
   const players: any[] = useMemo(() => {
-    if (scorecard?.players?.length)  return scorecard.players;
-    if (round?.participants?.length) return round.participants;
+    if ((scorecard?.players || []).length)  return scorecard?.players ?? [];
+    if ((round?.participants || []).length) return round?.participants ?? [];
     return [];
   }, [scorecard, round]);
 
   const holes: any[] = useMemo(() => {
-    if (scorecard?.holes?.length) return scorecard.holes;
+    if ((scorecard?.holes || []).length) return scorecard?.holes ?? [];
     return Array.from({ length: 18 }, (_, i) => ({
       holeNumber: i + 1,
       par:        4,
@@ -766,6 +784,16 @@ export default function RoundDetailScreen() {
         </View>
       </View>
 
+      {/* Weather card */}
+      {weather && (
+        <View style={styles.weatherCard}>
+          <Ionicons name="partly-sunny-outline" size={14} color={Colors.textSecondary} />
+          <Text style={styles.weatherText}>{weather.temp}°F</Text>
+          <Text style={[styles.weatherText, weather.rain > 40 ? styles.weatherAmber : null]}>{weather.rain}% rain</Text>
+          <Text style={[styles.weatherText, weather.wind > 20 ? styles.weatherRed : null]}>{weather.wind} mph wind</Text>
+        </View>
+      )}
+
       {/* Tab switcher */}
       <View style={styles.tabBar}>
         {(['scorecard', 'bets', 'skins'] as RoundTab[]).map((t) => (
@@ -1022,6 +1050,17 @@ const TOTAL_COL  = 62;
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
+
+  // Weather
+  weatherCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: Spacing.md, paddingVertical: 8,
+    backgroundColor: Colors.bgTertiary,
+    borderBottomWidth: 1, borderBottomColor: Colors.cardBorder,
+  },
+  weatherText:  { color: Colors.textSecondary, fontSize: 12 },
+  weatherAmber: { color: '#C17B2E' },
+  weatherRed:   { color: Colors.error },
 
   header: {
     flexDirection: 'row', alignItems: 'center', gap: 12,

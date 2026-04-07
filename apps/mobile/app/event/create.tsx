@@ -17,7 +17,7 @@ import { Colors, Radius, Spacing } from '../../constants/theme';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
 
 const EVENT_FORMATS = [
   { id: 'STROKE_PLAY',  label: 'Stroke Play',  sub: 'Total strokes, lowest wins',   icon: 'golf-outline' },
@@ -144,21 +144,26 @@ export default function CreateEventScreen() {
     return d.toISOString();
   }
 
-  // Step 3 - Players
+  // Step 3 - Scoring Format
+  const [scoringFormat, setScoringFormat]         = useState('GROSS');
+  const [handicapAllowance, setHandicapAllowance] = useState(100);
+  const [customScoringNote, setCustomScoringNote] = useState('');
+
+  // Step 4 - Players
   const [playerSearch, setPlayerSearch]     = useState('');
   const [searchResults, setSearchResults]   = useState<any[]>([]);
   const [searching, setSearching]           = useState(false);
   const [selectedPlayers, setSelectedPlayers] = useState<SelectedPlayer[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ─── Effective total steps (skip step 3 for quick game) ──────────────────
+  // ─── Effective total steps (skip step 4/players for quick game) ──────────
 
-  // We always render 4 steps but skip step 3 navigation when quickGame=true
-  const effectiveTotalSteps = isQuickGame ? 3 : TOTAL_STEPS;
+  // We always render 5 steps but skip step 4 (players) navigation when quickGame=true
+  const effectiveTotalSteps = isQuickGame ? 4 : TOTAL_STEPS;
 
-  // Map display step to actual step: when quickGame, step 3 in display = step 4 (review)
+  // Map display step to actual step: when quickGame, display step 4 = actual step 5 (review)
   function toActualStep(displayStep: number): number {
-    if (isQuickGame && displayStep >= 3) return displayStep + 1;
+    if (isQuickGame && displayStep >= 4) return displayStep + 1;
     return displayStep;
   }
 
@@ -182,9 +187,9 @@ export default function CreateEventScreen() {
 
   function goNext() {
     if (!validateStep()) return;
-    if (isQuickGame && step === 2) {
-      // Skip player selection step — jump straight to review (step 4)
-      setStep(4);
+    if (isQuickGame && step === 3) {
+      // Skip player selection step (step 4) — jump straight to review (step 5)
+      setStep(5);
     } else {
       setStep((s) => Math.min(s + 1, TOTAL_STEPS));
     }
@@ -193,9 +198,9 @@ export default function CreateEventScreen() {
   function goBack() {
     if (step === 1) {
       router.back();
-    } else if (isQuickGame && step === 4) {
-      // Go back to step 2, skipping player selection
-      setStep(2);
+    } else if (isQuickGame && step === 5) {
+      // Go back to step 3 (scoring), skipping player selection
+      setStep(3);
     } else {
       setStep((s) => s - 1);
     }
@@ -283,6 +288,9 @@ export default function CreateEventScreen() {
         startDate: formatDateISO(startDate),
         endDate:   formatDateISO(endDate),
         format,
+        scoringFormat,
+        handicapAllowance: scoringFormat === 'NET_HANDICAP' ? handicapAllowance : undefined,
+        customScoringNote: scoringFormat === 'CUSTOM' ? customScoringNote.trim() || undefined : undefined,
         participants: selectedPlayers.map((p) => ({
           userId: p.user.id,
           role:   p.role,
@@ -536,7 +544,85 @@ export default function CreateEventScreen() {
     </KeyboardAvoidingView>
   );
 
+  const SCORING_OPTIONS = [
+    { id: 'GROSS',       label: 'Gross Scoring',     sub: 'Raw strokes, no adjustment. Lowest score wins.' },
+    { id: 'NET_HANDICAP',label: 'Net / Handicap',    sub: 'Adjusted for handicap. Levels the playing field.' },
+    { id: 'CUSTOM',      label: 'Custom',            sub: 'Define your own rules.' },
+  ];
+
   const renderStep3 = () => (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1 }}
+      keyboardVerticalOffset={80}
+    >
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: 120 }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.stepHeading}>Scoring Format</Text>
+        <Text style={styles.stepSub}>How will scores be calculated?</Text>
+
+        <View style={styles.formatGrid}>
+          {SCORING_OPTIONS.map((opt) => {
+            const active = scoringFormat === opt.id;
+            return (
+              <TouchableOpacity
+                key={opt.id}
+                style={[styles.formatCard, active && styles.formatCardActive]}
+                onPress={() => setScoringFormat(opt.id)}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.formatLabel, active && styles.formatLabelActive]}>{opt.label}</Text>
+                <Text style={styles.formatSub}>{opt.sub}</Text>
+                {active && <View style={styles.formatCheck}><Ionicons name="checkmark-circle" size={16} color={Colors.lime} /></View>}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {scoringFormat === 'NET_HANDICAP' && (
+          <>
+            <Label>Handicap Allowance (%)</Label>
+            <View style={styles.stepperRow}>
+              <TouchableOpacity
+                style={styles.stepperBtn}
+                onPress={() => setHandicapAllowance(h => Math.max(0, h - 5))}
+              >
+                <Ionicons name="remove" size={18} color={Colors.textPrimary} />
+              </TouchableOpacity>
+              <Text style={styles.stepperValue}>{handicapAllowance}%</Text>
+              <TouchableOpacity
+                style={styles.stepperBtn}
+                onPress={() => setHandicapAllowance(h => Math.min(100, h + 5))}
+              >
+                <Ionicons name="add" size={18} color={Colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+
+        {scoringFormat === 'CUSTOM' && (
+          <>
+            <Label>Custom Scoring Note</Label>
+            <TextInput
+              style={[styles.input, styles.inputMulti]}
+              value={customScoringNote}
+              onChangeText={setCustomScoringNote}
+              placeholder="Describe your custom scoring rules..."
+              placeholderTextColor={Colors.textMuted}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+          </>
+        )}
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+
+  const renderStep4 = () => (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1 }}
@@ -644,7 +730,7 @@ export default function CreateEventScreen() {
     </KeyboardAvoidingView>
   );
 
-  const renderStep4 = () => {
+  const renderStep5 = () => {
     const selectedFormat = EVENT_FORMATS.find((f) => f.id === format);
     const selectedEventType = EVENT_TYPES.find((t) => t.id === eventType);
     return (
@@ -725,12 +811,13 @@ export default function CreateEventScreen() {
       case 2: return renderStep2();
       case 3: return renderStep3();
       case 4: return renderStep4();
+      case 5: return renderStep5();
       default: return null;
     }
   };
 
-  // Compute display step number for the indicator (quickGame collapses step 3 out)
-  const displayStep = isQuickGame && step === 4 ? 3 : step;
+  // Compute display step number for the indicator (quickGame collapses step 4/players out)
+  const displayStep = isQuickGame && step === 5 ? 4 : step;
 
   // ─── Main render ────────────────────────────────────────────────────────
 
@@ -765,8 +852,8 @@ export default function CreateEventScreen() {
           <TouchableOpacity
             style={styles.skipBtn}
             onPress={() => {
-              if (isQuickGame && step === 2) {
-                setStep(4);
+              if (isQuickGame && step === 3) {
+                setStep(5);
               } else {
                 setStep((s) => s + 1);
               }
@@ -895,6 +982,11 @@ const styles = StyleSheet.create({
   recurringLabel:     { color: Colors.textPrimary, fontSize: 15, fontWeight: '600' },
   recurringOptions:   { paddingTop: 4, paddingBottom: 8 },
   recurringFreqLabel: { color: Colors.textSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 0.8, marginBottom: 10, marginTop: 8 },
+
+  // Stepper (handicap allowance)
+  stepperRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, marginBottom: 16 },
+  stepperBtn:  { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.bgSecondary, borderWidth: 1.5, borderColor: Colors.cardBorder, alignItems: 'center', justifyContent: 'center' },
+  stepperValue:{ color: Colors.textPrimary, fontSize: 22, fontWeight: '800', minWidth: 60, textAlign: 'center' },
 
   // Search
   searchWrap:   {

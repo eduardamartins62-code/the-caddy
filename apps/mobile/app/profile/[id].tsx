@@ -356,48 +356,62 @@ export default function UserProfileScreen() {
 
         {/* ── Rounds tab ── */}
         {activeTab === 'rounds' && (
-          <View style={styles.roundsSection}>
-            {!s?.roundBreakdown?.length ? (
-              <View style={styles.emptyState}>
-                <Ionicons name="flag-outline" size={36} color={Colors.textMuted} />
-                <Text style={styles.emptyTitle}>No rounds yet</Text>
-              </View>
-            ) : s.roundBreakdown.map((r: any) => (
-              <GlassCard key={r.roundId} style={styles.roundCard} padding={14}>
-                <View>
-                  <Text style={styles.roundEvent}>{r.eventName}</Text>
-                  <Text style={styles.roundDate}>
-                    {new Date(r.date).toLocaleDateString('en-US', {
-                      month: 'short', day: 'numeric', year: 'numeric',
-                    })}
-                  </Text>
-                </View>
-                <View style={styles.roundRight}>
-                  <Text style={styles.roundGross}>{r.grossScore}</Text>
-                  <Text style={styles.roundNet}>net {r.netScore}</Text>
-                </View>
-              </GlassCard>
-            ))}
-          </View>
+          !canSeePosts ? (
+            <View style={styles.privateState}>
+              <Ionicons name="lock-closed-outline" size={36} color={Colors.textMuted} />
+              <Text style={styles.privateTitle}>This account is private</Text>
+            </View>
+          ) : !s?.roundBreakdown?.length ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="flag-outline" size={36} color={Colors.textMuted} />
+              <Text style={styles.emptyTitle}>No rounds yet</Text>
+            </View>
+          ) : (
+            <View style={styles.roundsSection}>
+              {(s.roundBreakdown || []).map((r: any) => (
+                <GlassCard key={r.roundId} style={styles.roundCard} padding={14}>
+                  <View>
+                    <Text style={styles.roundEvent}>{r.eventName}</Text>
+                    <Text style={styles.roundDate}>
+                      {new Date(r.date).toLocaleDateString('en-US', {
+                        month: 'short', day: 'numeric', year: 'numeric',
+                      })}
+                    </Text>
+                  </View>
+                  <View style={styles.roundRight}>
+                    <Text style={styles.roundGross}>{r.grossScore}</Text>
+                    <Text style={styles.roundNet}>net {r.netScore}</Text>
+                  </View>
+                </GlassCard>
+              ))}
+            </View>
+          )
         )}
 
         {/* ── Stats tab ── */}
         {activeTab === 'stats' && (
-          <View style={styles.statsSection}>
-            {[
-              { label: 'Total Eagles',  value: s?.totalEagles ?? 0,                  icon: 'flash',       color: Colors.eagle  },
-              { label: 'Total Birdies', value: s?.totalBirdies ?? 0,                 icon: 'star',        color: Colors.birdie },
-              { label: 'Total Pars',    value: s?.totalPars ?? 0,                    icon: 'flag',        color: Colors.textSecondary },
-              { label: 'Best Score',    value: s?.bestScore ?? '–',                  icon: 'trophy',      color: Colors.lime   },
-              { label: 'Average Score', value: s?.averageScore?.toFixed(1) ?? '–',   icon: 'trending-up', color: Colors.purple },
-            ].map((stat) => (
-              <GlassCard key={stat.label} style={styles.statCard} padding={16}>
-                <Ionicons name={stat.icon as any} size={22} color={stat.color} />
-                <Text style={styles.statLabel}>{stat.label}</Text>
-                <Text style={[styles.statValue, { color: stat.color }]}>{stat.value}</Text>
-              </GlassCard>
-            ))}
-          </View>
+          !canSeePosts ? (
+            <View style={styles.privateState}>
+              <Ionicons name="lock-closed-outline" size={36} color={Colors.textMuted} />
+              <Text style={styles.privateTitle}>This account is private</Text>
+            </View>
+          ) : (
+            <View style={styles.statsSection}>
+              {[
+                { label: 'Total Rounds',  value: s?.totalRounds ?? 0,                  icon: 'map-outline',         color: Colors.lime   },
+                { label: 'Avg Score',     value: s?.averageScore?.toFixed(1) ?? '–',   icon: 'trending-up-outline', color: Colors.purple },
+                { label: 'Best Round',    value: s?.bestScore ?? '–',                  icon: 'trophy-outline',      color: Colors.lime   },
+                { label: 'Eagles',        value: s?.totalEagles ?? 0,                  icon: 'flash-outline',       color: Colors.eagle  },
+                { label: 'Birdies',       value: s?.totalBirdies ?? 0,                 icon: 'star-outline',        color: Colors.birdie },
+              ].map((stat) => (
+                <GlassCard key={stat.label} style={styles.statCard} padding={16}>
+                  <Ionicons name={stat.icon as any} size={22} color={stat.color} />
+                  <Text style={styles.statLabel}>{stat.label}</Text>
+                  <Text style={[styles.statValue, { color: stat.color }]}>{stat.value}</Text>
+                </GlassCard>
+              ))}
+            </View>
+          )
         )}
       </ScrollView>
     </View>

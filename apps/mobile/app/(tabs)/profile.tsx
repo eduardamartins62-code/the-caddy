@@ -1,15 +1,11 @@
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Dimensions, Image, RefreshControl, Alert, Modal, TextInput, ActivityIndicator,
+  Dimensions, Image, RefreshControl, Alert, Modal, TextInput, ActivityIndicator, FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  Shield, LayoutGrid, TrendingUp, List,
-  Flag, MapPin, Bell, Zap, Star, Trophy, Map, AlertCircle, Camera,
-} from 'lucide-react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useQueryClient } from '@tanstack/react-query';
@@ -143,15 +139,21 @@ export default function ProfileTab() {
   if (!user) return null;
 
   const roleBadge =
-    user.role === 'SUPER_ADMIN'  ? { label: 'Admin',       color: Colors.lime }   :
-    user.role === 'SCOREKEEPER'  ? { label: 'Scorekeeper', color: Colors.purple } :
+    user.role === 'SUPER_ADMIN'  ? { label: 'Admin',       color: Colors.gold }   :
+    user.role === 'SCOREKEEPER'  ? { label: 'Scorekeeper', color: Colors.teal } :
     { label: 'Member', color: Colors.textSecondary };
 
-  const HIGHLIGHTS = [
-    { Icon: Zap,    label: 'Eagles',  value: stats?.totalEagles  ?? 0, color: Colors.eagle },
-    { Icon: Star,   label: 'Birdies', value: stats?.totalBirdies ?? 0, color: Colors.birdie },
-    { Icon: Flag,   label: 'Pars',    value: stats?.totalPars    ?? 0, color: Colors.textSecondary },
-    { Icon: Trophy, label: 'Rounds',  value: stats?.totalRounds  ?? 0, color: Colors.lime },
+  // Career stats grid items for the Stats tab
+  const CAREER_STATS = [
+    { label: 'Total Eagles',  value: stats?.totalEagles  ?? 0,   icon: 'flash-outline',    color: Colors.scoreEagle },
+    { label: 'Total Birdies', value: stats?.totalBirdies ?? 0,   icon: 'star-outline',     color: Colors.scoreBirdie },
+    { label: 'Total Pars',    value: stats?.totalPars    ?? 0,   icon: 'flag-outline',     color: Colors.textSecondary },
+    { label: 'Best Score',    value: stats?.bestScore    ?? '–', icon: 'trophy-outline',   color: Colors.gold },
+    { label: 'Avg Score',     value: stats?.averageScore ? (stats.averageScore as number).toFixed(1) : '–',
+                                                                  icon: 'trending-up-outline', color: Colors.teal },
+    { label: 'Total Rounds',  value: stats?.totalRounds  ?? 0,   icon: 'map-outline',      color: Colors.textPrimary },
+    { label: 'Holes in One',  value: (stats as any)?.holesInOne ?? 0, icon: 'radio-button-on-outline', color: Colors.gold },
+    { label: 'Rounds Played', value: stats?.totalRounds  ?? 0,   icon: 'golf-outline',     color: Colors.textSecondary },
   ];
 
   return (
@@ -164,12 +166,20 @@ export default function ProfileTab() {
             style={styles.iconBtn}
             onPress={() => router.push('/notifications' as any)}
           >
-            <Bell size={19} stroke={unread > 0 ? Colors.lime : Colors.textSecondary} strokeWidth={2} />
-            {unread > 0 && <View style={styles.bellBadge}><Text style={styles.bellBadgeText}>{unread > 9 ? '9+' : unread}</Text></View>}
+            <Ionicons
+              name="notifications-outline"
+              size={19}
+              color={unread > 0 ? Colors.gold : Colors.textSecondary}
+            />
+            {unread > 0 && (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>{unread > 9 ? '9+' : unread}</Text>
+              </View>
+            )}
           </TouchableOpacity>
           {(user.role === 'SUPER_ADMIN' || user.role === 'SCOREKEEPER') && (
             <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/admin/index' as any)}>
-              <Shield size={19} stroke={Colors.lime} strokeWidth={2} />
+              <Ionicons name="shield-checkmark-outline" size={19} color={Colors.gold} />
             </TouchableOpacity>
           )}
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/settings' as any)}>
@@ -180,7 +190,7 @@ export default function ProfileTab() {
 
       {meError ? (
         <View style={styles.errorContainer}>
-          <AlertCircle size={40} stroke={Colors.error} strokeWidth={1.5} />
+          <Ionicons name="alert-circle-outline" size={40} color={Colors.error} />
           <Text style={styles.errorTitle}>Failed to load profile</Text>
           <TouchableOpacity onPress={() => refetchMe()} style={styles.retryBtn}>
             <Text style={styles.retryText}>Try Again</Text>
@@ -190,34 +200,46 @@ export default function ProfileTab() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[styles.scroll, { paddingBottom: 120 }]}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.lime} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.gold} />}
         >
           {/* ── Hero card ── */}
           <LinearGradient colors={['#1A1A2E', Colors.bg]} style={styles.heroCard}>
             <View style={styles.heroGlow} />
             <View style={styles.heroTop}>
+              {/* Avatar (84px circle, gold 3px border) */}
               <TouchableOpacity onPress={handleAvatarPress} activeOpacity={0.8} style={styles.avatarWrapper}>
-                <AvatarRing uri={user.avatar} name={user.name} size={80} ring="lime" />
+                <AvatarRing uri={user.avatar} name={user.name} size={84} ring="lime" ringWidth={3} />
                 <View style={styles.cameraBadge}>
                   {avatarUploading
                     ? <ActivityIndicator size="small" color={Colors.bg} />
-                    : <Camera size={13} stroke={Colors.bg} strokeWidth={2.5} />}
+                    : <Ionicons name="camera" size={13} color={Colors.bg} />}
                 </View>
               </TouchableOpacity>
               <View style={styles.heroInfo}>
                 <Text style={styles.heroName}>{user.name}</Text>
+                {user.username && (
+                  <Text style={styles.heroUsername}>@{user.username}</Text>
+                )}
+                {/* HCP badge */}
+                <View style={styles.hcpBadge}>
+                  <Text style={styles.hcpBadgeText}>
+                    {(user.handicapIndex != null || user.handicap != null)
+                      ? `HCP ${user.handicapIndex ?? user.handicap}`
+                      : 'No handicap'}
+                  </Text>
+                </View>
                 <View style={[styles.roleBadge, { borderColor: roleBadge.color + '50', backgroundColor: roleBadge.color + '15' }]}>
                   <Text style={[styles.roleText, { color: roleBadge.color }]}>{roleBadge.label}</Text>
                 </View>
                 {user.homeCourse && (
                   <View style={styles.metaRow}>
-                    <Flag size={11} stroke={Colors.textMuted} strokeWidth={1.5} />
+                    <Ionicons name="flag-outline" size={11} color={Colors.textMuted} />
                     <Text style={styles.metaText}>{user.homeCourse}</Text>
                   </View>
                 )}
                 {user.location && (
                   <View style={styles.metaRow}>
-                    <MapPin size={11} stroke={Colors.textMuted} strokeWidth={1.5} />
+                    <Ionicons name="location-outline" size={11} color={Colors.textMuted} />
                     <Text style={styles.metaText}>{user.location}</Text>
                   </View>
                 )}
@@ -226,20 +248,28 @@ export default function ProfileTab() {
 
             {user.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
 
-            {/* Follow counts */}
+            {/* Stats row: posts | followers | following */}
             <View style={styles.followRow}>
-              <TouchableOpacity style={styles.followStat}>
+              <TouchableOpacity style={styles.followStat}
+                onPress={() => router.push(`/profile/${userId}/posts` as any)}>
+                <Text style={styles.followCount}>{(posts as any[]).length}</Text>
+                <Text style={styles.followLabel}>Posts</Text>
+              </TouchableOpacity>
+              <View style={styles.followDivider} />
+              <TouchableOpacity style={styles.followStat}
+                onPress={() => router.push('/friends' as any)}>
                 <Text style={styles.followCount}>{(followers as any[]).length}</Text>
                 <Text style={styles.followLabel}>Followers</Text>
               </TouchableOpacity>
               <View style={styles.followDivider} />
-              <TouchableOpacity style={styles.followStat}>
+              <TouchableOpacity style={styles.followStat}
+                onPress={() => router.push('/friends' as any)}>
                 <Text style={styles.followCount}>{(following as any[]).length}</Text>
                 <Text style={styles.followLabel}>Following</Text>
               </TouchableOpacity>
             </View>
 
-            {/* HCP display */}
+            {/* HCP display + update */}
             <View style={styles.hcpRow}>
               <View style={styles.hcpLeft}>
                 <Text style={styles.hcpValue}>
@@ -253,7 +283,7 @@ export default function ProfileTab() {
                 activeOpacity={0.7}
               >
                 {handicapLoading
-                  ? <ActivityIndicator size="small" color={Colors.lime} />
+                  ? <ActivityIndicator size="small" color={Colors.gold} />
                   : (
                     <Text style={styles.hcpBtnText}>
                       {(user.handicapIndex != null || user.handicap != null) ? '↻ Update' : 'Calculate'}
@@ -265,9 +295,9 @@ export default function ProfileTab() {
             {/* Stats row */}
             <View style={styles.heroStats}>
               {[
-                { label: 'Rounds', value: String(stats?.totalRounds ?? 0), color: Colors.purple },
+                { label: 'Rounds', value: String(stats?.totalRounds ?? 0), color: Colors.teal },
                 { label: 'Best',   value: String(stats?.bestScore   ?? '–'), color: Colors.textPrimary },
-                { label: 'Avg',    value: stats?.averageScore ? stats.averageScore.toFixed(1) : '–', color: Colors.textPrimary },
+                { label: 'Avg',    value: stats?.averageScore ? (stats.averageScore as number).toFixed(1) : '–', color: Colors.textPrimary },
               ].map((s) => (
                 <View key={s.label} style={styles.heroStat}>
                   <Text style={[styles.heroStatValue, { color: s.color }]}>{loading ? '–' : s.value}</Text>
@@ -285,63 +315,54 @@ export default function ProfileTab() {
             />
           </LinearGradient>
 
-          {/* ── Highlights (IG-style circles) ── */}
-          <View style={styles.highlightsRow}>
-            {HIGHLIGHTS.map((h) => (
-              <TouchableOpacity key={h.label} style={styles.highlightItem} activeOpacity={0.7}>
-                <View style={[styles.highlightCircle, { borderColor: h.color + '40' }]}>
-                  <h.Icon size={22} stroke={h.color} strokeWidth={1.8} />
-                </View>
-                <Text style={styles.highlightValue}>{loading ? '–' : h.value}</Text>
-                <Text style={styles.highlightLabel}>{h.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
           {/* ── Badges ── */}
           {userId && <BadgeGrid userId={userId} />}
 
           {/* ── 3-tab selector ── */}
           <View style={styles.tabToggle}>
             {([
-              { id: 'posts',  Icon: LayoutGrid },
-              { id: 'rounds', Icon: List },
-              { id: 'stats',  Icon: TrendingUp },
-            ] as { id: ProfileTab; Icon: any }[]).map((t) => (
+              { id: 'posts',  icon: 'grid-outline' },
+              { id: 'rounds', icon: 'list-outline' },
+              { id: 'stats',  icon: 'trending-up-outline' },
+            ] as { id: ProfileTab; icon: string }[]).map((t) => (
               <TouchableOpacity
                 key={t.id}
                 style={[styles.tabBtn, activeTab === t.id && styles.tabBtnActive]}
                 onPress={() => setActiveTab(t.id)}
               >
-                <t.Icon
+                <Ionicons
+                  name={t.icon as any}
                   size={20}
-                  stroke={activeTab === t.id ? Colors.lime : Colors.textMuted}
-                  strokeWidth={activeTab === t.id ? 2.2 : 1.7}
+                  color={activeTab === t.id ? Colors.gold : Colors.textMuted}
                 />
               </TouchableOpacity>
             ))}
           </View>
 
-          {/* ── Tab: Posts (3-column grid) ── */}
+          {/* ── Tab: Posts (3-column FlatList grid) ── */}
           {activeTab === 'posts' && (
-            <View style={styles.gridWrap}>
-              {postsLoading ? (
-                <>
-                  <SkeletonLoader height={CELL} style={{ flex: 1 / 3, margin: 1 }} />
-                  <SkeletonLoader height={CELL} style={{ flex: 1 / 3, margin: 1 }} />
-                  <SkeletonLoader height={CELL} style={{ flex: 1 / 3, margin: 1 }} />
-                </>
-              ) : (posts as any[]).length === 0 ? (
-                <View style={styles.emptyState}>
-                  <LayoutGrid size={36} stroke={Colors.textMuted} strokeWidth={1.5} />
-                  <Text style={styles.emptyText}>No posts yet</Text>
-                </View>
-              ) : (
-                (posts as any[]).map((post: any) => (
+            postsLoading ? (
+              <View style={styles.gridWrap}>
+                <SkeletonLoader height={CELL} style={{ flex: 1 / 3, margin: 1 }} />
+                <SkeletonLoader height={CELL} style={{ flex: 1 / 3, margin: 1 }} />
+                <SkeletonLoader height={CELL} style={{ flex: 1 / 3, margin: 1 }} />
+              </View>
+            ) : (posts as any[]).length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="grid-outline" size={36} color={Colors.textMuted} />
+                <Text style={styles.emptyText}>No posts yet</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={posts as any[]}
+                numColumns={3}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                renderItem={({ item: post }) => (
                   <TouchableOpacity
-                    key={post.id}
                     style={[styles.gridCell, { width: CELL, height: CELL }]}
                     activeOpacity={0.8}
+                    onPress={() => router.push(`/post/${post.id}` as any)}
                   >
                     {post.imageUrl ? (
                       <Image source={{ uri: post.imageUrl }} style={styles.gridImg} />
@@ -351,9 +372,9 @@ export default function ProfileTab() {
                       </View>
                     )}
                   </TouchableOpacity>
-                ))
-              )}
-            </View>
+                )}
+              />
+            )
           )}
 
           {/* ── Tab: Rounds ── */}
@@ -366,7 +387,7 @@ export default function ProfileTab() {
                 </>
               ) : (rounds as any[]).length === 0 ? (
                 <View style={styles.emptyState}>
-                  <Flag size={36} stroke={Colors.textMuted} strokeWidth={1.5} />
+                  <Ionicons name="flag-outline" size={36} color={Colors.textMuted} />
                   <Text style={styles.emptyText}>No rounds yet</Text>
                 </View>
               ) : (rounds as any[]).map((r: any) => (
@@ -376,7 +397,7 @@ export default function ProfileTab() {
                   padding={14}
                 >
                   <View style={styles.roundLeft}>
-                    <Text style={styles.roundEvent}>{r.eventName ?? r.event?.name ?? 'Round'}</Text>
+                    <Text style={styles.roundEvent}>{r.courseName ?? r.eventName ?? r.event?.name ?? 'Round'}</Text>
                     <Text style={styles.roundDate}>
                       {new Date(r.date ?? r.createdAt).toLocaleDateString('en-US', {
                         month: 'short', day: 'numeric', year: 'numeric',
@@ -392,34 +413,34 @@ export default function ProfileTab() {
             </View>
           )}
 
-          {/* ── Tab: Stats ── */}
+          {/* ── Tab: Stats — career stats grid ── */}
           {activeTab === 'stats' && (
             <View style={styles.statsSection}>
               {statsLoading ? (
                 <>
                   <SkeletonLoader height={60} borderRadius={Radius.lg} />
                   <SkeletonLoader height={60} borderRadius={Radius.lg} />
+                  <SkeletonLoader height={60} borderRadius={Radius.lg} />
                 </>
               ) : statsError ? (
                 <View style={styles.emptyState}>
-                  <AlertCircle size={36} stroke={Colors.error} strokeWidth={1.5} />
+                  <Ionicons name="alert-circle-outline" size={36} color={Colors.error} />
                   <Text style={styles.emptyText}>Could not load stats</Text>
                 </View>
               ) : (
-                [
-                  { label: 'Total Eagles',   value: stats?.totalEagles  ?? 0,    Icon: Zap,        color: Colors.eagle },
-                  { label: 'Total Birdies',  value: stats?.totalBirdies ?? 0,    Icon: Star,       color: Colors.birdie },
-                  { label: 'Total Pars',     value: stats?.totalPars    ?? 0,    Icon: Flag,       color: Colors.textSecondary },
-                  { label: 'Best Score',     value: stats?.bestScore    ?? '–',  Icon: Trophy,     color: Colors.lime },
-                  { label: 'Average Score',  value: stats?.averageScore ? stats.averageScore.toFixed(1) : '–', Icon: TrendingUp, color: Colors.purple },
-                  { label: 'Total Rounds',   value: stats?.totalRounds  ?? 0,    Icon: Map,        color: Colors.textPrimary },
-                ].map((s) => (
-                  <GlassCard key={s.label} style={styles.statCard} padding={14}>
-                    <s.Icon size={22} stroke={s.color} strokeWidth={1.8} />
-                    <Text style={styles.statLabel}>{s.label}</Text>
-                    <Text style={[styles.statValue, { color: s.color }]}>{s.value}</Text>
-                  </GlassCard>
-                ))
+                <View style={styles.statsGrid}>
+                  {CAREER_STATS.map((s) => (
+                    <View key={s.label} style={styles.statGridCell}>
+                      <View style={[styles.statIconWrap, { borderColor: s.color + '30' }]}>
+                        <Ionicons name={s.icon as any} size={20} color={s.color} />
+                      </View>
+                      <Text style={[styles.statGridValue, { color: s.color }]}>
+                        {loading ? '–' : String(s.value)}
+                      </Text>
+                      <Text style={styles.statGridLabel}>{s.label}</Text>
+                    </View>
+                  ))}
+                </View>
               )}
             </View>
           )}
@@ -486,11 +507,17 @@ export default function ProfileTab() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
 
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingVertical: 14 },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 14,
+  },
   username: {
     color: Colors.textPrimary,
     fontSize: 20,
-    fontFamily: 'CormorantGaramond_600SemiBold',
+    fontWeight: '600',
   },
   topBarRight: { flexDirection: 'row', gap: 8 },
   iconBtn: {
@@ -506,13 +533,13 @@ const styles = StyleSheet.create({
   bellBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
 
   errorContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  errorTitle: { color: Colors.textSecondary, fontSize: 16, fontFamily: 'DMSans_400Regular' },
+  errorTitle: { color: Colors.textSecondary, fontSize: 16 },
   retryBtn: {
     backgroundColor: Colors.goldDim, borderRadius: Radius.pill,
     paddingHorizontal: 20, paddingVertical: 8,
     borderWidth: 1, borderColor: Colors.gold + '40',
   },
-  retryText: { color: Colors.gold, fontSize: 13, fontFamily: 'DMSans_500Medium' },
+  retryText: { color: Colors.gold, fontSize: 13, fontWeight: '600' },
 
   scroll: { paddingHorizontal: 0 },
 
@@ -526,53 +553,92 @@ const styles = StyleSheet.create({
     borderRadius: 75, backgroundColor: Colors.gold, opacity: 0.05,
   },
   heroTop: { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
-  heroInfo: { flex: 1, gap: 6 },
-  heroName: { color: Colors.textPrimary, fontSize: 18, fontFamily: 'DMSans_500Medium' },
+  heroInfo: { flex: 1, gap: 5 },
+  heroName: { color: Colors.textPrimary, fontSize: 18, fontWeight: '600' },
+  heroUsername: { color: Colors.textSecondary, fontSize: 13, marginTop: -2 },
+  hcpBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.goldDim,
+    borderRadius: Radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: Colors.gold + '50',
+  },
+  hcpBadgeText: { color: Colors.gold, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
   roleBadge: { alignSelf: 'flex-start', borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 1 },
-  roleText: { fontSize: 11, fontFamily: 'DMSans_500Medium', letterSpacing: 0.5 },
+  roleText: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  metaText: { color: Colors.textMuted, fontSize: 12, fontFamily: 'DMSans_400Regular' },
-  bio: { color: Colors.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 14, fontFamily: 'DMSans_400Regular' },
+  metaText: { color: Colors.textMuted, fontSize: 12 },
+  bio: { color: Colors.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 14 },
 
-  followRow: { flexDirection: 'row', alignItems: 'center', marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: Colors.border },
+  followRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
   followStat: { flex: 1, alignItems: 'center' },
-  followCount: { color: Colors.textPrimary, fontSize: 20, fontFamily: 'DMMono_400Regular' },
-  followLabel: { color: Colors.textMuted, fontSize: 10, fontFamily: 'DMSans_500Medium', letterSpacing: 1, textTransform: 'uppercase', marginTop: 2 },
+  followCount: { color: Colors.textPrimary, fontSize: 20, fontWeight: '700' },
+  followLabel: {
+    color: Colors.textMuted,
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginTop: 2,
+  },
   followDivider: { width: 1, height: 32, backgroundColor: Colors.border },
 
   hcpRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: Colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
   },
   hcpLeft: { flex: 1 },
-  hcpValue: { color: Colors.gold, fontSize: 26, fontFamily: 'DMMono_400Regular', letterSpacing: -0.5 },
+  hcpValue: { color: Colors.gold, fontSize: 26, fontWeight: '700', letterSpacing: -0.5 },
   hcpBtn: {
-    paddingHorizontal: 14, paddingVertical: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: Radius.pill,
     backgroundColor: Colors.goldDim,
-    borderWidth: 1, borderColor: Colors.gold + '50',
-    minWidth: 80, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.gold + '50',
+    minWidth: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  hcpBtnText: { color: Colors.gold, fontSize: 13, fontFamily: 'DMSans_500Medium' },
+  hcpBtnText: { color: Colors.gold, fontSize: 13, fontWeight: '600' },
 
-  heroStats: { flexDirection: 'row', marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: Colors.border },
+  heroStats: {
+    flexDirection: 'row',
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
   heroStat: { flex: 1, alignItems: 'center' },
-  heroStatValue: { fontSize: 20, fontFamily: 'DMMono_400Regular' },
-  heroStatLabel: { color: Colors.textMuted, fontSize: 10, fontFamily: 'DMSans_500Medium', letterSpacing: 1, marginTop: 3, textTransform: 'uppercase' },
-
-  highlightsRow: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: Spacing.md, marginBottom: 20 },
-  highlightItem: { alignItems: 'center', gap: 4 },
-  highlightCircle: {
-    width: 58, height: 58, borderRadius: 29,
-    backgroundColor: Colors.bgSecondary, borderWidth: 2, borderColor: Colors.border,
-    alignItems: 'center', justifyContent: 'center',
+  heroStatValue: { fontSize: 20, fontWeight: '700' },
+  heroStatLabel: {
+    color: Colors.textMuted,
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 1,
+    marginTop: 3,
+    textTransform: 'uppercase',
   },
-  highlightValue: { color: Colors.textPrimary, fontSize: 15, fontFamily: 'DMMono_400Regular' },
-  highlightLabel: { color: Colors.textMuted, fontSize: 10, fontFamily: 'DMSans_400Regular' },
 
   tabToggle: {
     flexDirection: 'row',
-    borderTopWidth: 1, borderBottomWidth: 1, borderColor: Colors.border,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: Colors.border,
     marginBottom: 2,
   },
   tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 12 },
@@ -583,63 +649,106 @@ const styles = StyleSheet.create({
   gridCell: { margin: 1, overflow: 'hidden' },
   gridImg: { width: '100%', height: '100%' },
   gridTextCard: {
-    flex: 1, backgroundColor: Colors.bgSecondary,
-    alignItems: 'center', justifyContent: 'center', padding: 8,
+    flex: 1,
+    backgroundColor: Colors.bgSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
   },
-  gridText: { color: Colors.textSecondary, fontSize: 11, textAlign: 'center', lineHeight: 15, fontFamily: 'DMSans_400Regular' },
+  gridText: { color: Colors.textSecondary, fontSize: 11, textAlign: 'center', lineHeight: 15 },
 
   // Rounds
   roundsSection: { gap: 8, paddingHorizontal: Spacing.md, marginTop: 8, paddingBottom: 20 },
   roundCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   roundLeft: {},
-  roundEvent: { color: Colors.textPrimary, fontSize: 14, fontFamily: 'DMSans_500Medium' },
-  roundDate: { color: Colors.textMuted, fontSize: 12, marginTop: 2, fontFamily: 'DMSans_400Regular' },
+  roundEvent: { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  roundDate: { color: Colors.textMuted, fontSize: 12, marginTop: 2 },
   roundRight: { alignItems: 'flex-end' },
-  roundGross: { color: Colors.gold, fontSize: 18, fontFamily: 'DMMono_400Regular' },
-  roundNet: { color: Colors.textMuted, fontSize: 12, fontFamily: 'DMSans_400Regular' },
+  roundGross: { color: Colors.gold, fontSize: 18, fontWeight: '700' },
+  roundNet: { color: Colors.textMuted, fontSize: 12 },
 
-  // Stats
-  statsSection: { gap: 8, paddingHorizontal: Spacing.md, marginTop: 8, paddingBottom: 20 },
-  statCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  statLabel: { color: Colors.textSecondary, fontSize: 14, flex: 1, fontFamily: 'DMSans_400Regular' },
-  statValue: { fontSize: 22, fontFamily: 'DMMono_400Regular' },
+  // Stats grid
+  statsSection: { paddingHorizontal: Spacing.md, marginTop: 8, paddingBottom: 20 },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  statGridCell: {
+    width: '47%',
+    backgroundColor: Colors.bgSecondary,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 16,
+    alignItems: 'center',
+    gap: 6,
+  },
+  statIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.bgTertiary,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statGridValue: { fontSize: 24, fontWeight: '700', letterSpacing: -0.5 },
+  statGridLabel: { color: Colors.textSecondary, fontSize: 11, textAlign: 'center' },
 
   // Empty
   emptyState: { alignItems: 'center', paddingTop: 40, gap: 10, width: '100%' },
-  emptyText: { color: Colors.textSecondary, fontSize: 15, fontFamily: 'DMSans_400Regular' },
+  emptyText: { color: Colors.textSecondary, fontSize: 15 },
 
   // Avatar wrapper + camera badge
   avatarWrapper: { position: 'relative' },
   cameraBadge: {
-    position: 'absolute', bottom: 0, right: 0,
-    width: 26, height: 26, borderRadius: 13,
-    backgroundColor: Colors.gold, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: Colors.bg,
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: Colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.bg,
   },
 
   // Edit profile modal
   modalOverlay: {
-    flex: 1, backgroundColor: Colors.overlay,
-    alignItems: 'center', justifyContent: 'center',
+    flex: 1,
+    backgroundColor: Colors.overlay,
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: Spacing.md,
   },
   modalCard: {
-    width: '100%', backgroundColor: Colors.bgSecondary,
-    borderRadius: Radius.xl, padding: 24,
-    borderWidth: 1, borderColor: Colors.border,
+    width: '100%',
+    backgroundColor: Colors.bgSecondary,
+    borderRadius: Radius.xl,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  modalTitle: { color: Colors.textPrimary, fontSize: 18, fontFamily: 'CormorantGaramond_600SemiBold', marginBottom: 20 },
-  modalLabel: { color: Colors.textSecondary, fontSize: 12, fontFamily: 'DMSans_500Medium', letterSpacing: 0.5, marginBottom: 6 },
+  modalTitle: { color: Colors.textPrimary, fontSize: 18, fontWeight: '700', marginBottom: 20 },
+  modalLabel: { color: Colors.textSecondary, fontSize: 12, fontWeight: '600', letterSpacing: 0.5, marginBottom: 6 },
   modalInput: {
-    backgroundColor: Colors.bgTertiary, borderRadius: Radius.md,
-    borderWidth: 1, borderColor: Colors.border,
-    color: Colors.textPrimary, fontSize: 15, paddingHorizontal: 14, paddingVertical: 11,
-    marginBottom: 16, fontFamily: 'DMSans_400Regular',
+    backgroundColor: Colors.bgTertiary,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    color: Colors.textPrimary,
+    fontSize: 15,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    marginBottom: 16,
   },
   modalActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
   modalBtn: { flex: 1, height: 44, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
   modalBtnCancel: { backgroundColor: Colors.bgTertiary, borderWidth: 1, borderColor: Colors.border },
-  modalBtnCancelText: { color: Colors.textSecondary, fontSize: 14, fontFamily: 'DMSans_500Medium' },
+  modalBtnCancelText: { color: Colors.textSecondary, fontSize: 14, fontWeight: '500' },
   modalBtnSave: { backgroundColor: Colors.gold },
-  modalBtnSaveText: { color: Colors.bg, fontSize: 14, fontFamily: 'DMSans_500Medium' },
+  modalBtnSaveText: { color: Colors.bg, fontSize: 14, fontWeight: '600' },
 });

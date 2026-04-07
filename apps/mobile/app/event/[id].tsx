@@ -137,11 +137,14 @@ export default function EventDetailScreen() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [itinSubmitting, setItinSubmitting] = useState(false);
 
+  // ─── RSVP dismiss state (hide bar after Decline without refetch) ───────────
+  const [rsvpDismissed, setRsvpDismissed] = useState(false);
+
   // ─── History modal state ───────────────────────────────────────────────────
   const [histModalVisible, setHistModalVisible] = useState(false);
   const [histForm, setHistForm] = useState({
     year: new Date().getFullYear(),
-    champion: '',
+    championName: '',
     winningScore: '',
     coursePlayed: '',
     recap: '',
@@ -234,9 +237,18 @@ export default function EventDetailScreen() {
   async function respond(status: 'ACCEPTED' | 'DECLINED') {
     setResponding(true);
     try {
-      await eventsApi.respond(id, status);
-      qc.invalidateQueries({ queryKey: ['event', id] });
-      qc.invalidateQueries({ queryKey: ['participants', id] });
+      const token = await SecureStore.getItemAsync('auth_token');
+      await fetch(`${API_BASE}/events/${id}/rsvp`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status }),
+      });
+      if (status === 'ACCEPTED') {
+        qc.invalidateQueries({ queryKey: ['event', id] });
+        qc.invalidateQueries({ queryKey: ['participants', id] });
+      } else {
+        setRsvpDismissed(true);
+      }
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to respond');
     } finally {
@@ -314,17 +326,18 @@ export default function EventDetailScreen() {
   // ─── Admin: Add History Entry ──────────────────────────────────────────────
 
   async function submitHistoryEntry() {
-    if (!histForm.champion.trim()) {
+    if (!histForm.championName.trim()) {
       Alert.alert('Error', 'Champion name is required');
       return;
     }
     setHistSubmitting(true);
     try {
       const newEntry = await eventsApi.addHistory(id, {
+        eventId: id,
         year: Number(histForm.year),
-        champion: histForm.champion,
+        championName: histForm.championName,
         winningScore: histForm.winningScore ? Number(histForm.winningScore) : undefined,
-        coursePlayed: histForm.coursePlayed || undefined,
+        courseId: undefined,
         recap: histForm.recap || undefined,
       }) as any;
       // Upload photos if any
@@ -343,7 +356,7 @@ export default function EventDetailScreen() {
         }
       }
       setHistModalVisible(false);
-      setHistForm({ year: new Date().getFullYear(), champion: '', winningScore: '', coursePlayed: '', recap: '' });
+      setHistForm({ year: new Date().getFullYear(), championName: '', winningScore: '', coursePlayed: '', recap: '' });
       setHistoryPhotos([]);
       await refetchHistory();
     } catch (e: any) {
@@ -687,6 +700,21 @@ export default function EventDetailScreen() {
           {event.location ? <DetailRow icon="location-outline" label="Location" value={event.location} /> : null}
           {event.type ? <DetailRow icon="trophy-outline" label="Format" value={event.type} /> : null}
           {event.host?.name ? <DetailRow icon="person-outline" label="Host" value={event.host.name} /> : null}
+          {/* Scoring format */}
+          {(() => {
+            const sf = (event as any).scoringFormat;
+            if (!sf) return null;
+            let label = '';
+            if (sf === 'GROSS') label = 'Gross Scoring';
+            else if (sf === 'NET_HANDICAP') {
+              const allowance = (event as any).handicapAllowance ?? 100;
+              label = `Net / Handicap Adjusted (${allowance}% allowance)`;
+            } else {
+              const note = (event as any).customScoringNote;
+              label = note ? `Custom: ${note}` : 'Custom';
+            }
+            return <DetailRow icon="options-outline" label="Scoring" value={label} />;
+          })()}
         </GlassCard>
 
         {/* Stats */}
@@ -907,35 +935,49 @@ export default function EventDetailScreen() {
         )}
         {rounds.map((round: any, i: number) => {
           const { bg: sBg, text: sText } = statusBadgeColors(round.status ?? 'UPCOMING');
+          const isLive = round.status === 'LIVE';
+          const isCompleted = round.status === 'COMPLETED';
           return (
-            <TouchableOpacity
-              key={round.id}
-              activeOpacity={0.8}
-              onPress={() => router.push(`/round/${round.id}` as any)}
-            >
-              <GlassCard style={styles.roundCard} glow={round.status === 'LIVE' ? 'lime' : 'none'}>
-                <View style={styles.roundCardRow}>
-                  <View style={styles.roundNumBadge}>
-                    <Text style={styles.roundNumText}>R{round.roundNumber ?? i + 1}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.roundCourseName} numberOfLines={1}>
-                      {round.courseName ?? `Round ${round.roundNumber ?? i + 1}`}
-                    </Text>
-                    <Text style={styles.roundMeta}>
-                      {fmt(round.date)}{round.coursePar ? ` · Par ${round.coursePar}` : ''}
-                    </Text>
-                    {round.players != null && (
-                      <Text style={styles.roundMeta}>{round.players} players</Text>
-                    )}
-                  </View>
-                  <View style={[styles.roundStatusPill, { backgroundColor: sBg }]}>
-                    <Text style={[styles.roundStatusText, { color: sText }]}>{round.status ?? 'UPCOMING'}</Text>
-                  </View>
+            <GlassCard key={round.id} style={styles.roundCard} glow={isLive ? 'lime' : 'none'}>
+              <View style={styles.roundCardRow}>
+                <View style={styles.roundNumBadge}>
+                  {isLive && <View style={styles.livePulse} />}
+                  <Text style={styles.roundNumText}>R{round.roundNumber ?? i + 1}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} style={{ alignSelf: 'flex-end', marginTop: 4 }} />
-              </GlassCard>
-            </TouchableOpacity>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.roundCourseName} numberOfLines={1}>
+                    {round.courseName ?? `Round ${round.roundNumber ?? i + 1}`}
+                  </Text>
+                  <Text style={styles.roundMeta}>
+                    {fmt(round.date)}{round.coursePar ? ` · Par ${round.coursePar}` : ''}
+                  </Text>
+                  {round.players != null && (
+                    <Text style={styles.roundMeta}>{round.players} players</Text>
+                  )}
+                </View>
+                <View style={[styles.roundStatusPill, { backgroundColor: sBg }]}>
+                  <Text style={[styles.roundStatusText, { color: sText }]}>{round.status ?? 'UPCOMING'}</Text>
+                </View>
+              </View>
+              {isLive && (
+                <TouchableOpacity
+                  style={styles.roundActionBtn}
+                  onPress={() => router.push(`/admin/scores?roundId=${round.id}` as any)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.roundActionBtnText}>Enter Scores</Text>
+                </TouchableOpacity>
+              )}
+              {isCompleted && (
+                <TouchableOpacity
+                  style={[styles.roundActionBtn, styles.roundActionBtnOutline]}
+                  onPress={() => router.push(`/round/${round.id}` as any)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.roundActionBtnText, { color: Colors.textSecondary }]}>View Scorecard</Text>
+                </TouchableOpacity>
+              )}
+            </GlassCard>
           );
         })}
       </ScrollView>
@@ -1075,10 +1117,10 @@ export default function EventDetailScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.lime} />}
       >
-        {isOrganizer && (
+        {user?.role === 'SUPER_ADMIN' && (
           <TouchableOpacity style={styles.adminHeaderBtn} onPress={() => setHistModalVisible(true)}>
             <Ionicons name="add" size={16} color={Colors.lime} />
-            <Text style={styles.adminHeaderBtnText}>Add Year</Text>
+            <Text style={styles.adminHeaderBtnText}>Add Past Year</Text>
           </TouchableOpacity>
         )}
         {sorted.length === 0 && (
@@ -1096,7 +1138,7 @@ export default function EventDetailScreen() {
               <View style={{ flex: 1, marginLeft: 14 }}>
                 <View style={styles.histChampionRow}>
                   <Ionicons name="trophy" size={14} color={Colors.lime} />
-                  <Text style={styles.histChampion}>{entry.champion ?? entry.winner ?? '—'}</Text>
+                  <Text style={styles.histChampion}>{entry.championName ?? entry.champion ?? entry.winner ?? '—'}</Text>
                 </View>
                 {entry.coursePlayed && (
                   <Text style={styles.histMeta}>{entry.coursePlayed}</Text>
@@ -1214,6 +1256,31 @@ export default function EventDetailScreen() {
   return (
     <View style={[styles.screen, { paddingBottom: insets.bottom + 90 }]}>
       <Hero />
+
+      {/* ── RSVP banner (top of screen, below hero) ─────────────────────── */}
+      {myStatus === 'PENDING' && !rsvpDismissed && (
+        <View style={styles.rsvpBanner}>
+          <Ionicons name="mail-outline" size={16} color={Colors.lime} />
+          <Text style={styles.rsvpBannerText} numberOfLines={1}>
+            {"You've been invited to "}<Text style={{ fontWeight: '700' }}>{event.name}</Text>
+          </Text>
+          <TouchableOpacity
+            style={styles.rsvpBannerAccept}
+            onPress={() => respond('ACCEPTED')}
+            disabled={responding}
+          >
+            {responding ? <ActivityIndicator size="small" color={Colors.bg} /> : <Text style={styles.rsvpBannerAcceptText}>Accept</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.rsvpBannerDecline}
+            onPress={() => respond('DECLINED')}
+            disabled={responding}
+          >
+            <Text style={styles.rsvpBannerDeclineText}>Decline</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <TabBar />
       <View style={{ flex: 1 }}>{renderTab()}</View>
 
@@ -1358,13 +1425,13 @@ export default function EventDetailScreen() {
                 maxLength={4}
               />
 
-              <Text style={modalStyles.fieldLabel}>Champion *</Text>
+              <Text style={modalStyles.fieldLabel}>Champion Name *</Text>
               <TextInput
                 style={modalStyles.input}
                 placeholder="Winner's name"
                 placeholderTextColor={Colors.textMuted}
-                value={histForm.champion}
-                onChangeText={v => setHistForm(f => ({ ...f, champion: v }))}
+                value={histForm.championName}
+                onChangeText={v => setHistForm(f => ({ ...f, championName: v }))}
               />
 
               <Text style={modalStyles.fieldLabel}>Winning Score</Text>
@@ -1622,6 +1689,25 @@ const styles = StyleSheet.create({
   screen:  { flex: 1, backgroundColor: Colors.bg },
   center:  { alignItems: 'center', justifyContent: 'center' },
 
+  // RSVP top banner
+  rsvpBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.limeDim,
+    borderBottomWidth: 1, borderBottomColor: Colors.lime + '33',
+    paddingHorizontal: Spacing.md, paddingVertical: 10,
+  },
+  rsvpBannerText: { flex: 1, color: Colors.textPrimary, fontSize: 13 },
+  rsvpBannerAccept: {
+    backgroundColor: Colors.lime, borderRadius: Radius.pill,
+    paddingHorizontal: 12, paddingVertical: 6,
+  },
+  rsvpBannerAcceptText: { color: Colors.bg, fontSize: 12, fontWeight: '700' },
+  rsvpBannerDecline: {
+    borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.pill,
+    paddingHorizontal: 12, paddingVertical: 6,
+  },
+  rsvpBannerDeclineText: { color: Colors.textSecondary, fontSize: 12, fontWeight: '600' },
+
   // Hero
   hero:         { paddingHorizontal: Spacing.md, paddingBottom: 20 },
   heroTopRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
@@ -1728,12 +1814,16 @@ const styles = StyleSheet.create({
   // Rounds
   roundCard:       { marginBottom: 12 },
   roundCardRow:    { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 },
-  roundNumBadge:   { width: 38, height: 38, borderRadius: 10, backgroundColor: Colors.limeDim, alignItems: 'center', justifyContent: 'center' },
+  roundNumBadge:   { width: 38, height: 38, borderRadius: 10, backgroundColor: Colors.limeDim, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   roundNumText:    { color: Colors.lime, fontSize: 12, fontWeight: '800' },
   roundCourseName: { color: Colors.textPrimary, fontSize: 15, fontWeight: '700' },
   roundMeta:       { color: Colors.textSecondary, fontSize: 12, marginTop: 2 },
   roundStatusPill: { borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 4 },
   roundStatusText: { fontSize: 10, fontWeight: '700' },
+  livePulse:       { position: 'absolute', top: -3, right: -3, width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.error, borderWidth: 1.5, borderColor: Colors.bg },
+  roundActionBtn:  { marginTop: 8, paddingVertical: 8, borderRadius: Radius.pill, backgroundColor: Colors.lime, alignItems: 'center' },
+  roundActionBtnOutline: { backgroundColor: 'transparent', borderWidth: 1, borderColor: Colors.cardBorder },
+  roundActionBtnText:    { color: Colors.bg, fontSize: 13, fontWeight: '700' },
 
   // Itinerary
   dayPills:        { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },

@@ -11,7 +11,7 @@ router.get('/users', async (_req, res: Response) => {
   const users = await prisma.user.findMany({
     select: {
       id: true, name: true, username: true, email: true, phone: true,
-      role: true, avatar: true, createdAt: true, onboardingComplete: true,
+      role: true, avatar: true, createdAt: true, isOnboarded: true,
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -36,6 +36,44 @@ router.put('/users/:id/role', async (req: AuthRequest, res: Response) => {
     select: { id: true, name: true, email: true, role: true },
   });
   res.json({ data: updated });
+});
+
+// GET /api/admin/invites
+router.get('/invites', authenticate, requireAdmin, async (req, res: Response) => {
+  const codes = await prisma.inviteCode.findMany({ orderBy: { createdAt: 'desc' } });
+  res.json({ data: codes });
+});
+
+// POST /api/admin/invites — generate code
+router.post('/invites', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const code = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  const invite = await prisma.inviteCode.create({ data: { code, createdById: req.user!.id } });
+  res.json({ data: invite });
+});
+
+// GET /api/admin/waitlist
+router.get('/waitlist', authenticate, requireAdmin, async (req, res: Response) => {
+  const list = await prisma.waitlist.findMany({ orderBy: { createdAt: 'desc' } });
+  res.json({ data: list });
+});
+
+// GET /api/admin/settings
+router.get('/settings', authenticate, requireAdmin, async (req, res: Response) => {
+  const settings = await prisma.appSetting.findMany();
+  const obj = Object.fromEntries(settings.map((s: any) => [s.key, s.value]));
+  res.json({ data: obj });
+});
+
+// PUT /api/admin/settings
+router.put('/settings', authenticate, requireAdmin, async (req, res: Response) => {
+  const { inviteOnly } = req.body;
+  await prisma.appSetting.upsert({
+    where: { key: 'inviteOnly' },
+    update: { value: String(inviteOnly) },
+    create: { key: 'inviteOnly', value: String(inviteOnly) },
+  });
+  res.json({ success: true });
 });
 
 // GET /api/admin/stats — platform stats

@@ -27,6 +27,8 @@ function isPhone(input: string): boolean {
 }
 
 export default function SignInScreen() {
+  // Spec: "Log In | Create Account" toggle — cosmetic only, same OTP flow
+  const [authTab, setAuthTab]           = useState<'login' | 'create'>('login');
   const [inputMode, setInputMode]       = useState<'email' | 'phone'>('email');
   const [contact, setContact]           = useState('');
   const [loading, setLoading]           = useState(false);
@@ -48,6 +50,7 @@ export default function SignInScreen() {
     }).catch(() => {});
   }, []);
 
+  // Spec: email-only with format validation; Continue only enabled when valid
   const usePhone = inputMode === 'phone';
   const isEmail  = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.trim());
   const isValidPhone = isPhone(contact.trim());
@@ -169,21 +172,22 @@ export default function SignInScreen() {
             <Text style={styles.tagline}>Your game. Your people.</Text>
           </View>
 
-          {/* Email / Phone toggle */}
-          <View style={styles.toggleRow}>
+          {/* Log In | Create Account toggle (cosmetic — same OTP flow) */}
+          <View style={styles.authTabRow}>
             <TouchableOpacity
-              style={[styles.toggleBtn, inputMode === 'email' && styles.toggleBtnActive]}
-              onPress={() => { setInputMode('email'); setContact(''); setError(''); }}
+              style={[styles.authTab, authTab === 'login' && styles.authTabActive]}
+              onPress={() => { setAuthTab('login'); setError(''); }}
             >
-              <Text style={[styles.toggleText, inputMode === 'email' && styles.toggleTextActive]}>Email</Text>
-              {inputMode === 'email' && <View style={styles.toggleUnderline} />}
+              <Text style={[styles.authTabText, authTab === 'login' && styles.authTabTextActive]}>Log In</Text>
+              {authTab === 'login' && <View style={styles.toggleUnderline} />}
             </TouchableOpacity>
+            <View style={styles.authTabDivider} />
             <TouchableOpacity
-              style={[styles.toggleBtn, inputMode === 'phone' && styles.toggleBtnActive]}
-              onPress={() => { setInputMode('phone'); setContact(''); setError(''); }}
+              style={[styles.authTab, authTab === 'create' && styles.authTabActive]}
+              onPress={() => { setAuthTab('create'); setError(''); }}
             >
-              <Text style={[styles.toggleText, inputMode === 'phone' && styles.toggleTextActive]}>Phone</Text>
-              {inputMode === 'phone' && <View style={styles.toggleUnderline} />}
+              <Text style={[styles.authTabText, authTab === 'create' && styles.authTabTextActive]}>Create Account</Text>
+              {authTab === 'create' && <View style={styles.toggleUnderline} />}
             </TouchableOpacity>
           </View>
 
@@ -250,8 +254,13 @@ export default function SignInScreen() {
             </View>
           )}
 
-          {/* Continue CTA */}
-          <TouchableOpacity onPress={handleOtpSubmit} disabled={loading} activeOpacity={0.85} style={{ marginTop: 4 }}>
+          {/* Continue CTA — disabled until contact is valid */}
+          <TouchableOpacity
+            onPress={handleOtpSubmit}
+            disabled={loading || !isValid}
+            activeOpacity={0.85}
+            style={{ marginTop: 4, opacity: isValid && !loading ? 1 : 0.45 }}
+          >
             <LinearGradient
               colors={['#F0C866', '#C4912A']}
               start={{ x: 0, y: 0 }}
@@ -428,6 +437,36 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
+  // Log In | Create Account tab toggle
+  authTabRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 0,
+    marginBottom: 20,
+    paddingHorizontal: 4,
+  },
+  authTab: {
+    alignItems: 'center',
+    paddingBottom: 6,
+    position: 'relative',
+    paddingHorizontal: 4,
+  },
+  authTabActive: {},
+  authTabText: {
+    color: Colors.textMuted,
+    fontSize: 15,
+    fontFamily: 'DMSans_500Medium',
+  },
+  authTabTextActive: { color: Colors.textPrimary },
+  authTabDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: Colors.border,
+    marginHorizontal: 14,
+    alignSelf: 'center',
+  },
+
+  // Legacy toggleRow kept for waitlist modal compatibility
   toggleRow: {
     flexDirection: 'row',
     gap: 24,

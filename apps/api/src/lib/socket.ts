@@ -1,5 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
+import prisma from './prisma';
 
 interface JwtPayload {
   id:    string;
@@ -38,7 +39,15 @@ export function setupSocketHandlers(io: Server) {
     // Auto-join personal room for notifications and direct messages
     socket.join(`user:${userId}`);
 
-    // Join a specific event room for leaderboard/score updates
+    // joinEvent — user joins event room for leaderboard/score updates
+    socket.on('joinEvent', (eventId: string) => {
+      if (typeof eventId === 'string' && eventId.trim()) {
+        socket.join(`event:${eventId}`);
+        console.log(`Socket ${socket.id} joined event:${eventId}`);
+      }
+    });
+
+    // Join a specific event room (legacy names)
     socket.on('join_event', (eventId: string) => {
       if (typeof eventId === 'string' && eventId.trim()) {
         socket.join(`event:${eventId}`);
@@ -46,11 +55,15 @@ export function setupSocketHandlers(io: Server) {
       }
     });
 
-    // Legacy event name support
     socket.on('join:event', (eventId: string) => {
       if (typeof eventId === 'string' && eventId.trim()) {
         socket.join(`event:${eventId}`);
       }
+    });
+
+    // leaveEvent — user leaves event room
+    socket.on('leaveEvent', (eventId: string) => {
+      socket.leave(`event:${eventId}`);
     });
 
     socket.on('leave_event', (eventId: string) => {
@@ -72,6 +85,50 @@ export function setupSocketHandlers(io: Server) {
     // round:status — broadcast to event room
     socket.on('round:status', (data: { eventId: string; [key: string]: unknown }) => {
       io.to(`event:${data.eventId}`).emit('round:status', data);
+    });
+
+    // sendMessage — save message to DB and emit to receiver's personal room
+    socket.on('sendMessage', async (data: { receiverId: string; content: string }) => {
+      if (!data.receiverId || !data.content) return;
+      try {
+        const message = await prisma.message.create({
+          data: {
+            senderId:   userId,
+            receiverId: data.receiverId,
+            content:    data.content,
+          },
+          include: {
+            sender:   { select: { id: true, name: true, avatar: true } },
+            receiver: { select: { id: true, name: true, avatar: true } },
+          },
+        });
+        // Emit to receiver's personal room
+        io.to(`user:${data.receiverId}`).emit('message:new', message);
+        // Emit back to sender so they can update their UI
+        socket.emit('message:new', message);
+      } catch (err) {
+        console.error('sendMessage error:', err);
+        socket.emit('error', { message: 'Failed to send message' });
+      }
+    });
+
+    // markRead — mark messages as read
+    socket.on('markRead', async (data: { senderId: string }) => {
+      if (!data.senderId) return;
+      try {
+        await prisma.message.updateMany({
+          where: {
+            senderId:   data.senderId,
+            receiverId: userId,
+            isRead:     false,
+          },
+          data: { isRead: true },
+        });
+        // Notify the sender that their messages were read
+        io.to(`user:${data.senderId}`).emit('messages:read', { readBy: userId });
+      } catch (err) {
+        console.error('markRead error:', err);
+      }
     });
 
     socket.on('disconnect', () => {

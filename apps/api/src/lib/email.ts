@@ -32,5 +32,36 @@ export async function sendOtpEmail(email: string, otp: string): Promise<void> {
   });
 }
 
-// Keep backward-compatible alias
+export async function sendWelcome(email: string, name: string): Promise<void> {
+  console.log(`[DEV] Welcome email for ${name} <${email}>`);
+
+  if (!process.env.SENDGRID_API_KEY) {
+    console.warn('[Email] SENDGRID_API_KEY not set — welcome email logged to console only');
+    return;
+  }
+
+  await sgMail.send({
+    to: email,
+    from: FROM_EMAIL,
+    subject: 'Welcome to The Caddy',
+    html: `
+      <div style="background:#080C14;padding:40px;font-family:sans-serif;max-width:480px;margin:0 auto;border-radius:12px;border:1px solid rgba(212,168,67,0.2)">
+        <h1 style="color:#D4A843;font-size:24px;margin-bottom:8px;letter-spacing:2px">THE CADDY</h1>
+        <p style="color:#8A8FA8;margin-bottom:32px">Your game. Your people.</p>
+        <p style="color:#F4EFE6;font-size:18px;margin-bottom:16px">Welcome, ${name}!</p>
+        <p style="color:#8A8FA8;font-size:14px;margin-bottom:24px">
+          You're all set. Track your rounds, compete with friends, and build your legacy on the course.
+        </p>
+        <p style="color:#8A8FA8;font-size:13px">Tee it up — The Caddy team</p>
+      </div>
+    `,
+  });
+}
+
+// sendOTP is a convenience alias matching the spec naming
+export async function sendOTP(email: string, otp: string): Promise<void> {
+  return sendOtpEmail(email, otp);
+}
+
+// Keep backward-compatible aliases
 export const sendOTPEmail = sendOtpEmail;
