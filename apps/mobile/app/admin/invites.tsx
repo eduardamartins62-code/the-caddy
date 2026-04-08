@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { Copy, Plus } from 'lucide-react-native';
-import * as Clipboard from 'expo-clipboard';
+import { Clipboard } from 'react-native';
 import { Colors, Spacing, Radius } from '../../constants/theme';
 import { API_BASE } from '../../constants/api';
 
@@ -68,7 +68,7 @@ export default function InviteCodesScreen() {
       const data = await res.json();
       if (data.data) {
         Alert.alert('New Code Generated', `Code: ${data.data.code}`, [
-          { text: 'Copy', onPress: () => Clipboard.setStringAsync(data.data.code) },
+          { text: 'Copy', onPress: () => Clipboard.setString(data.data.code) },
           { text: 'OK' },
         ]);
         loadData();
@@ -133,7 +133,7 @@ export default function InviteCodesScreen() {
             <Text style={styles.codeStatus}>
               {c.isActive ? (c.usedById ? 'Used' : 'Active') : 'Inactive'}
             </Text>
-            <TouchableOpacity onPress={() => Clipboard.setStringAsync(c.code)}>
+            <TouchableOpacity onPress={() => Clipboard.setString(c.code)}>
               <Copy size={16} color={Colors.textSecondary} />
             </TouchableOpacity>
           </View>

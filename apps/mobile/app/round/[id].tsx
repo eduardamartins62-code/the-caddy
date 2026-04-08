@@ -463,17 +463,17 @@ export default function RoundDetailScreen() {
       }).catch(() => {});
   }, [round]);
 
-  // Bets queries — lazy, only when Bets tab is active
-  const { data: skinsData, isLoading: skinsLoading } = useQuery({
+  // Bets queries — disabled (tab removed)
+  const { data: skinsData } = useQuery({
     queryKey: ['skins', id],
     queryFn: () => (roundsApi as any).getSkins(id),
-    enabled: !!id && activeTab === 'bets',
+    enabled: false,
     retry: false,
   });
-  const { data: nassauData, isLoading: nassauLoading } = useQuery({
+  const { data: nassauData } = useQuery({
     queryKey: ['nassau', id],
     queryFn: () => (roundsApi as any).getNassau(id),
-    enabled: !!id && activeTab === 'bets',
+    enabled: false,
     retry: false,
   });
 
@@ -924,7 +924,7 @@ export default function RoundDetailScreen() {
         <View style={styles.infoRow}>
           <Text style={styles.infoText}>
             {round.date ? new Date(round.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : '—'}
-            {round.teeTime ? ` • ${round.teeTime}` : ''}
+            {(round as any).teeTime ? ` • ${(round as any).teeTime}` : ''}
           </Text>
           {round.coursePar && (
             <>
